@@ -1,0 +1,198 @@
+@import "tailwindcss";
+
+/* 像素风格字体和边框 */
+.pixel-title {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  letter-spacing: 2px;
+}
+
+.pixel-border {
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.pixel-border-border {
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 步骤指示器动画 */
+.step-dot {
+  transition: all 0.3s ease;
+}
+
+.step-dot.active {
+  transform: scale(1.3);
+  box-shadow: 0 0 12px currentColor;
+}
+
+/* 条形图动画 */
+.stat-bar-fill {
+  transition: width 0.8s ease-out;
+}
+
+/* 祝贺动画 */
+@keyframes celebrate-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-20px) scale(1.1); }
+}
+
+@keyframes celebrate-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.celebrate-bounce {
+  animation: celebrate-bounce 0.6s ease-in-out 3;
+}
+
+.celebrate-spin {
+  animation: celebrate-spin 1s ease-in-out;
+}
+
+.sparkle {
+  animation: sparkle 0.8s ease-in-out infinite;
+}
+
+/* ============ 属性动态特效 ============ */
+
+/* 火焰特效 */
+@keyframes fire-flicker {
+  0%, 100% { box-shadow: 0 0 10px #ef444440, 0 0 20px #ef444420, inset 0 0 10px #ef444410; }
+  25% { box-shadow: 0 0 15px #f9731640, 0 0 30px #f9731620, inset 0 0 15px #f9731610; }
+  50% { box-shadow: 0 0 20px #ef444460, 0 0 40px #ef444430, inset 0 0 20px #ef444420; }
+  75% { box-shadow: 0 0 15px #f9731640, 0 0 30px #f9731620, inset 0 0 15px #f9731610; }
+}
+
+/* 水滴特效 */
+@keyframes water-ripple {
+  0%, 100% { box-shadow: 0 0 10px #3b82f640, 0 0 20px #3b82f620; }
+  50% { box-shadow: 0 0 20px #3b82f660, 0 0 40px #3b82f630, 0 4px 15px #3b82f420; }
+}
+
+/* 草叶特效 */
+@keyframes grass-sway {
+  0%, 100% { box-shadow: 0 0 10px #22c55e40, 0 0 20px #22c55e20; transform: rotate(-1deg); }
+  50% { box-shadow: 0 0 20px #22c55e60, 0 0 40px #22c55e30; transform: rotate(1deg); }
+}
+
+/* 电光特效 */
+@keyframes electric-spark {
+  0%, 100% { box-shadow: 0 0 10px #eab30840, 0 0 20px #eab30820; }
+  10% { box-shadow: 0 0 25px #eab30860, 0 0 50px #eab30840, 2px 2px 0 #eab30880; }
+  20% { box-shadow: 0 0 10px #eab30840, 0 0 20px #eab30820; }
+  30% { box-shadow: 0 0 30px #eab30870, 0 0 60px #eab30850, -2px -2px 0 #eab30880; }
+  40% { box-shadow: 0 0 10px #eab30840, 0 0 20px #eab30820; }
+  50% { box-shadow: 0 0 20px #eab30860, 0 0 40px #eab30830; }
+  60%, 90% { box-shadow: 0 0 10px #eab30840, 0 0 20px #eab30820; }
+}
+
+/* 冰晶特效 */
+@keyframes ice-shine {
+  0%, 100% { box-shadow: 0 0 10px #06b6d440, 0 0 20px #06b6d420; filter: brightness(1); }
+  50% { box-shadow: 0 0 25px #06b6d460, 0 0 50px #06b6d430, inset 0 0 20px #06b6d420; filter: brightness(1.2); }
+}
+
+/* 地面特效 */
+@keyframes ground-rumble {
+  0%, 100% { box-shadow: 0 0 10px #a1620740, 0 0 20px #a1620720; transform: translateY(0); }
+  25% { box-shadow: 0 0 15px #a1620750, 0 0 30px #a1620730; transform: translateY(-2px); }
+  75% { box-shadow: 0 0 15px #a1620750, 0 0 30px #a1620730; transform: translateY(2px); }
+}
+
+/* 风特效 */
+@keyframes wind-gust {
+  0%, 100% { box-shadow: 0 0 10px #8b5cf640, 0 0 20px #8b5cf620; transform: translateX(0); }
+  25% { box-shadow: 0 0 20px #8b5cf660, 0 0 40px #8b5cf630; transform: translateX(-3px); }
+  75% { box-shadow: 0 0 20px #8b5cf660, 0 0 40px #8b5cf630; transform: translateX(3px); }
+}
+
+/* 暗特效 */
+@keyframes dark-pulse {
+  0%, 100% { box-shadow: 0 0 10px #4a1d9640, 0 0 20px #4a1d9620; }
+  50% { box-shadow: 0 0 30px #4a1d9670, 0 0 60px #4a1d9640, inset 0 0 30px #4a1d9630; }
+}
+
+/* 光特效 */
+@keyframes light-glow {
+  0%, 100% { box-shadow: 0 0 15px #f472b640, 0 0 30px #f472b620; }
+  50% { box-shadow: 0 0 30px #f472b670, 0 0 60px #f472b640, 0 0 90px #f472b610; }
+}
+
+/* 毒特效 */
+@keyframes poison-bubble {
+  0%, 100% { box-shadow: 0 0 10px #7c3aed40, 0 0 20px #7c3aed20; }
+  50% { box-shadow: 0 0 20px #7c3aed60, 0 0 40px #7c3aed30; }
+}
+
+/* 格斗特效 */
+@keyframes fighting-aura {
+  0%, 100% { box-shadow: 0 0 10px #dc262640, 0 0 20px #dc262620; transform: scale(1); }
+  50% { box-shadow: 0 0 25px #dc262660, 0 0 50px #dc262630; transform: scale(1.05); }
+}
+
+/* 虫特效 */
+@keyframes bug-crawl {
+  0%, 100% { box-shadow: 0 0 10px #84cc1640, 0 0 20px #84cc1620; }
+  50% { box-shadow: 0 0 20px #84cc1660, 0 0 40px #84cc1630; }
+}
+
+/* 特效类名 */
+.element-fire { animation: fire-flicker 1.5s ease-in-out infinite; }
+.element-water { animation: water-ripple 2s ease-in-out infinite; }
+.element-grass { animation: grass-sway 2.5s ease-in-out infinite; }
+.element-electric { animation: electric-spark 1.2s ease-in-out infinite; }
+.element-ice { animation: ice-shine 2s ease-in-out infinite; }
+.element-ground { animation: ground-rumble 1.8s ease-in-out infinite; }
+.element-flying { animation: wind-gust 2s ease-in-out infinite; }
+.element-dark { animation: dark-pulse 2.5s ease-in-out infinite; }
+.element-psychic { animation: light-glow 2s ease-in-out infinite; }
+.element-poison { animation: poison-bubble 2s ease-in-out infinite; }
+.element-fighting { animation: fighting-aura 1.5s ease-in-out infinite; }
+.element-bug { animation: bug-crawl 2s ease-in-out infinite; }
+
+/* 缓慢旋转 */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+/* 漂浮动画 */
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  33% { transform: translateY(-10px) rotate(5deg); }
+  66% { transform: translateY(5px) rotate(-5deg); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+/* 全局样式 */
+body {
+  background-color: #1a1a2e;
+  color: white;
+  overflow-x: hidden;
+}
