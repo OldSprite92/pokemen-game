@@ -1,5 +1,6 @@
 import type { Monster, ElementType } from '../types';
 import { createSkill } from './starterMonsters';
+import { getLevelRangeAtPosition } from './mapZoneSystem';
 
 /** 野生宝可梦等级配置 */
 export interface WildMonsterConfig {
@@ -535,26 +536,26 @@ export const ALL_WILD_MONSTERS: WildMonsterConfig[] = [
   { monster: YAN_ZONG_DOG, minLevel: 4, maxLevel: 9, encounterRate: 10, preferredElements: ['fire', 'rock'] },
   { monster: YOU_MING_BAT, minLevel: 5, maxLevel: 10, encounterRate: 8, preferredElements: ['ghost', 'poison'] },
   { monster: DONG_YUAN_GOOSE, minLevel: 4, maxLevel: 9, encounterRate: 10, preferredElements: ['ice', 'flying'] },
-  { monster: LEI_GUAN_RHINO, minLevel: 6, maxLevel: 12, encounterRate: 6, preferredElements: ['electric', 'ground'] },
+  { monster: LEI_GUAN_RHINO, minLevel: 6, maxLevel: 10, encounterRate: 6, preferredElements: ['electric', 'ground'] },
   { monster: ZAO_KAI_TURTLE, minLevel: 5, maxLevel: 10, encounterRate: 8, preferredElements: ['water', 'steel'] },
-  { monster: LIE_KONG_EAGLE, minLevel: 6, maxLevel: 11, encounterRate: 7, preferredElements: ['rock', 'flying'] },
+  { monster: LIE_KONG_EAGLE, minLevel: 6, maxLevel: 10, encounterRate: 7, preferredElements: ['rock', 'flying'] },
   { monster: YING_WEI_FOX, minLevel: 3, maxLevel: 7, encounterRate: 12, preferredElements: ['normal', 'fairy'] },
   { monster: CHI_NI_CROC, minLevel: 5, maxLevel: 10, encounterRate: 8, preferredElements: ['fire', 'ground'] },
   { monster: GLOW_FROG, minLevel: 3, maxLevel: 8, encounterRate: 10, preferredElements: ['grass', 'poison'] },
   { monster: CI_YU_SWALLOW, minLevel: 4, maxLevel: 9, encounterRate: 8, preferredElements: ['electric', 'steel'] },
-  { monster: DA_SHE_ELEPHANT, minLevel: 7, maxLevel: 13, encounterRate: 5, preferredElements: ['fighting', 'dark'] },
+  { monster: DA_SHE_ELEPHANT, minLevel: 7, maxLevel: 10, encounterRate: 5, preferredElements: ['fighting', 'dark'] },
   { monster: XIANG_CAO_PIG, minLevel: 3, maxLevel: 7, encounterRate: 10, preferredElements: ['grass', 'fairy'] },
   { monster: PAO_PAO_PIG, minLevel: 4, maxLevel: 8, encounterRate: 9, preferredElements: ['ice', 'fighting'] },
   { monster: CAO_MI_ORCHID, minLevel: 2, maxLevel: 6, encounterRate: 15, preferredElements: ['grass'] },
   { monster: SHUI_MIAN_COTTON, minLevel: 2, maxLevel: 6, encounterRate: 15, preferredElements: ['water'] },
-  { monster: HUO_YI_DRAGON, minLevel: 8, maxLevel: 15, encounterRate: 4, preferredElements: ['fire', 'dragon'] },
+  { monster: HUO_YI_DRAGON, minLevel: 8, maxLevel: 10, encounterRate: 4, preferredElements: ['fire', 'dragon'] },
   { monster: BING_JU_LIZARD, minLevel: 5, maxLevel: 9, encounterRate: 10, preferredElements: ['ice'] },
-  { monster: YAN_LU_LIZARD, minLevel: 6, maxLevel: 11, encounterRate: 7, preferredElements: ['rock', 'steel'] },
+  { monster: YAN_LU_LIZARD, minLevel: 6, maxLevel: 10, encounterRate: 7, preferredElements: ['rock', 'steel'] },
   { monster: SHAN_DIAN_LIZARD, minLevel: 4, maxLevel: 8, encounterRate: 12, preferredElements: ['electric'] },
-  { monster: YI_HUAN_DRAGON, minLevel: 9, maxLevel: 15, encounterRate: 3, preferredElements: ['dragon', 'dark'] },
+  { monster: YI_HUAN_DRAGON, minLevel: 9, maxLevel: 10, encounterRate: 3, preferredElements: ['dragon', 'dark'] },
   { monster: XUE_BAI_NA, minLevel: 5, maxLevel: 10, encounterRate: 8, preferredElements: ['ice', 'water'] },
-  { monster: HEI_XIAN_PIG, minLevel: 6, maxLevel: 11, encounterRate: 6, preferredElements: ['dark', 'fairy'] },
-  { monster: LIE_GUANG_BIRD, minLevel: 8, maxLevel: 15, encounterRate: 4, preferredElements: ['light'] },
+  { monster: HEI_XIAN_PIG, minLevel: 6, maxLevel: 10, encounterRate: 6, preferredElements: ['dark', 'fairy'] },
+  { monster: LIE_GUANG_BIRD, minLevel: 8, maxLevel: 10, encounterRate: 4, preferredElements: ['light'] },
 ];
 
 /** 根据大陆属性获取可遇到的野生宝可梦池 */
@@ -565,13 +566,37 @@ export function getWildMonsterPool(element: ElementType): WildMonsterConfig[] {
 }
 
 /** 生成一个野生宝可梦实例（带随机等级波动） */
-export function generateWildMonster(config: WildMonsterConfig): Monster {
-  const levelRange = config.maxLevel - config.minLevel;
-  const level = config.minLevel + Math.floor(Math.random() * (levelRange + 1));
-  
+export function generateWildMonster(
+  config: WildMonsterConfig,
+  playerX?: number,
+  playerY?: number,
+  gridSize: number = 10
+): Monster {
+  let level: number;
+
+  // 如果提供了位置信息，按区域等级生成
+  if (playerX !== undefined && playerY !== undefined) {
+    const zoneRange = getLevelRangeAtPosition(playerX, playerY, gridSize);
+    // 取配置范围与区域范围的交集
+    const minLevel = Math.max(config.minLevel, zoneRange.minLevel);
+    const maxLevel = Math.min(config.maxLevel, zoneRange.maxLevel);
+
+    if (minLevel <= maxLevel) {
+      const levelRange = maxLevel - minLevel;
+      level = minLevel + Math.floor(Math.random() * (levelRange + 1));
+    } else {
+      // 无交集时使用区域范围（保证难度合理）
+      level = zoneRange.minLevel + Math.floor(Math.random() * (zoneRange.maxLevel - zoneRange.minLevel + 1));
+    }
+  } else {
+    // 回退到原有逻辑
+    const levelRange = config.maxLevel - config.minLevel;
+    level = config.minLevel + Math.floor(Math.random() * (levelRange + 1));
+  }
+
   // 根据等级调整属性
   const levelMultiplier = 1 + (level - 5) * 0.1;
-  
+
   return {
     ...config.monster,
     id: undefined,
@@ -588,20 +613,38 @@ export function generateWildMonster(config: WildMonsterConfig): Monster {
 }
 
 /** 随机选择一个野生宝可梦 */
-export function randomEncounter(element: ElementType): Monster | null {
+export function randomEncounter(
+  element: ElementType,
+  playerX?: number,
+  playerY?: number,
+  gridSize: number = 10
+): Monster | null {
   const pool = getWildMonsterPool(element);
   if (pool.length === 0) return null;
 
+  // 根据位置过滤：只保留与区域等级范围有交集的宝可梦
+  let filteredPool = pool;
+  if (playerX !== undefined && playerY !== undefined) {
+    const zoneRange = getLevelRangeAtPosition(playerX, playerY, gridSize);
+    filteredPool = pool.filter((config) => {
+      // 配置范围与区域范围有交集
+      return !(config.maxLevel < zoneRange.minLevel || config.minLevel > zoneRange.maxLevel);
+    });
+  }
+
+  // 如果过滤后为空，回退到全部池子
+  const targetPool = filteredPool.length > 0 ? filteredPool : pool;
+
   // 根据encounterRate加权随机选择
-  const totalRate = pool.reduce((sum, c) => sum + c.encounterRate, 0);
+  const totalRate = targetPool.reduce((sum, c) => sum + c.encounterRate, 0);
   let roll = Math.random() * totalRate;
-  
-  for (const config of pool) {
+
+  for (const config of targetPool) {
     roll -= config.encounterRate;
     if (roll <= 0) {
-      return generateWildMonster(config);
+      return generateWildMonster(config, playerX, playerY, gridSize);
     }
   }
-  
-  return generateWildMonster(pool[0]);
+
+  return generateWildMonster(targetPool[0], playerX, playerY, gridSize);
 }
