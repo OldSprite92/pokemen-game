@@ -53,10 +53,10 @@ describe('野生宝可梦数据', () => {
     });
   });
 
-  it('每个宝可梦都有2-4个技能', () => {
+  it('每个宝可梦都有2-6个技能', () => {
     ALL_WILD_MONSTERS.forEach((config) => {
       expect(config.monster.skills.length).toBeGreaterThanOrEqual(2);
-      expect(config.monster.skills.length).toBeLessThanOrEqual(4);
+      expect(config.monster.skills.length).toBeLessThanOrEqual(6);
     });
   });
 
@@ -78,8 +78,8 @@ describe('野生宝可梦数据', () => {
 
   it('等级范围有效', () => {
     ALL_WILD_MONSTERS.forEach((config) => {
-      expect(config.minLevel).toBeGreaterThanOrEqual(2);
-      expect(config.maxLevel).toBeLessThanOrEqual(15);
+      expect(config.minLevel).toBeGreaterThanOrEqual(1);
+      expect(config.maxLevel).toBeLessThanOrEqual(10);
       expect(config.minLevel).toBeLessThanOrEqual(config.maxLevel);
     });
   });
@@ -162,7 +162,7 @@ describe('randomEncounter', () => {
     expect(monster).not.toBeNull();
     if (monster) {
       expect(monster.name).toBeTruthy();
-      expect(monster.level).toBeGreaterThanOrEqual(2);
+      expect(monster.level).toBeGreaterThanOrEqual(1);
     }
   });
 

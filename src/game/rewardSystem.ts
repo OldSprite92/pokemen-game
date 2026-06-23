@@ -1,5 +1,6 @@
 import type { Monster, ElementType, Skill, PokeBallType } from '../types';
 import { POKEBALL_CONFIG } from './catchSystem';
+import { learnNewSkill, checkSkillUnlock, getSkillCountByLevel } from './skillPool';
 
 /** 战斗胜利奖励结果 */
 export interface BattleReward {
@@ -108,7 +109,7 @@ export function generateRandomSkill(element: ElementType): Skill {
 }
 
 /** 应用经验值（升级检测） */
-export function applyExp(monster: Monster, exp: number): { monster: Monster; leveledUp: boolean } {
+export function applyExp(monster: Monster, exp: number): { monster: Monster; leveledUp: boolean; newSkills?: Skill[] } {
   let newExp = monster.exp + exp;
   let newLevel = monster.level;
   let newHp = monster.maxHp || monster.hp;
@@ -117,9 +118,12 @@ export function applyExp(monster: Monster, exp: number): { monster: Monster; lev
   let newSpeed = monster.speed;
   let expToNext = monster.expToNext || 100;
   let leveledUp = false;
+  const newSkills: Skill[] = [];
+  let currentSkills = [...monster.skills];
 
-  // 检测升级
-  while (newExp >= expToNext) {
+  // 检测升级（最高10级）
+  while (newExp >= expToNext && newLevel < 10) {
+    const oldLevel = newLevel;
     newExp -= expToNext;
     newLevel++;
     leveledUp = true;
@@ -132,7 +136,26 @@ export function applyExp(monster: Monster, exp: number): { monster: Monster; lev
 
     // 新的升级所需经验递增
     expToNext = Math.floor(expToNext * 1.2) + 10;
+
+    // 检查是否触发技能解锁
+    const unlockLevel = checkSkillUnlock(oldLevel, newLevel);
+    if (unlockLevel) {
+      const skill = learnNewSkill(currentSkills, monster.element, unlockLevel);
+      if (skill) {
+        newSkills.push(skill);
+        currentSkills.push(skill);
+      }
+    }
   }
+
+  // 满级后不再积累经验
+  if (newLevel >= 10) {
+    newExp = 0;
+  }
+
+  // 限制技能数量上限
+  const maxSkills = getSkillCountByLevel(newLevel);
+  const finalSkills = currentSkills.slice(0, maxSkills);
 
   return {
     monster: {
@@ -145,8 +168,10 @@ export function applyExp(monster: Monster, exp: number): { monster: Monster; lev
       attack: newAttack,
       defense: newDefense,
       speed: newSpeed,
+      skills: finalSkills,
     },
     leveledUp,
+    newSkills: newSkills.length > 0 ? newSkills : undefined,
   };
 }
 

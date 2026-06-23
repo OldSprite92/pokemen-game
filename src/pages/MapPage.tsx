@@ -139,8 +139,8 @@ export default function MapPage() {
   const triggerEvent = async (cellType: string, cont: Continent): Promise<AdventureEvent | null> => {
     switch (cellType) {
       case 'wild': {
-        // 根据大陆属性生成野生宝可梦
-        const wildMonster = randomEncounter(cont.element);
+        // 根据大陆属性生成野生宝可梦，传入当前位置
+        const wildMonster = randomEncounter(cont.element, currentPos.x, currentPos.y, cont.gridSize);
         if (wildMonster) {
           // 保存野生宝可梦到状态，供战斗页面使用
           useGameStore.getState().setWildMonster(wildMonster);
