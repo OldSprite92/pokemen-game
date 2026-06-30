@@ -28,6 +28,13 @@ export default function BattlePage() {
   const checkBattleEnd = useGameStore((state) => state.checkBattleEnd);
   const endBattleExtended = useGameStore((state) => state.endBattleExtended);
   const switchPlayerMonster = useGameStore((state) => state.switchPlayerMonster);
+  const currentTrainer = useGameStore((state) => state.currentTrainer);
+
+  // 获取当前训练师的 localStorage key
+  const getStorageKey = (key: string) => {
+    const trainerId = currentTrainer?.id;
+    return trainerId ? `${key}_trainer_${trainerId}` : key;
+  };
 
   const { playerMonster, enemyMonster, playerCurrentHp, enemyCurrentHp, turn, isOver, winner, log, playerTeam, activePlayerIndex } = extendedBattleState;
 
@@ -37,16 +44,34 @@ export default function BattlePage() {
   }, []);
 
   const loadInventory = async () => {
-    // 简化：从localStorage或默认值加载
-    const saved = localStorage.getItem('pokeballs');
+    // 使用训练师隔离的 key 加载背包
+    const saved = localStorage.getItem(getStorageKey('pokeballs'));
     if (saved) {
       setInventory(JSON.parse(saved));
     }
   };
 
   const saveInventory = (inv: Record<PokeBallType, number>) => {
-    localStorage.setItem('pokeballs', JSON.stringify(inv));
+    localStorage.setItem(getStorageKey('pokeballs'), JSON.stringify(inv));
     setInventory(inv);
+  };
+
+  // 🐛 BUG-006 修复：更新遭遇记录状态
+  const updateEncounterStatus = async (monsterName: string, captured: boolean, defeated: boolean) => {
+    try {
+      const encounters = await db.encounters.where('monsterName').equals(monsterName).toArray();
+      if (encounters.length > 0) {
+        // 更新最新的遭遇记录
+        const latest = encounters.sort((a, b) => 
+          new Date(b.encounteredAt).getTime() - new Date(a.encounteredAt).getTime()
+        )[0];
+        if (latest.id) {
+          await db.encounters.update(latest.id, { captured, defeated });
+        }
+      }
+    } catch (err) {
+      console.error('更新遭遇记录失败:', err);
+    }
   };
 
   // 如果没有战斗数据，返回主页
@@ -119,6 +144,9 @@ export default function BattlePage() {
   const handleBattleEnd = () => {
     const state = useGameStore.getState().extendedBattleState;
     if (state.winner === 'player' && enemyMonster) {
+      // 🐛 BUG-006 修复：更新遭遇记录的击败状态
+      updateEncounterStatus(enemyMonster.name, false, true);
+
       // 生成奖励
       const reward = generateBattleReward(enemyMonster);
       const texts = generateRewardText(reward);
@@ -150,6 +178,18 @@ export default function BattlePage() {
         newInventory[drop.type] = (newInventory[drop.type] || 0) + drop.count;
       });
       saveInventory(newInventory);
+
+      // 🐛 BUG-003 修复：保存技能石到 localStorage（使用训练师隔离的 key）
+      if (reward.skillStone && reward.skillStoneElement) {
+        const savedStones = localStorage.getItem(getStorageKey('skillStones'));
+        const stones = savedStones ? JSON.parse(savedStones) : [];
+        stones.push({
+          element: reward.skillStoneElement,
+          id: `stone-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+        });
+        localStorage.setItem(getStorageKey('skillStones'), JSON.stringify(stones));
+        texts.push(`获得技能石！💎`);
+      }
 
       setRewardTexts(texts);
       setShowReward(true);
@@ -196,6 +236,9 @@ export default function BattlePage() {
           }
         });
 
+        // 🐛 BUG-006 修复：更新遭遇记录的捕获状态
+        updateEncounterStatus(enemyMonster.name, true, false);
+
         // 结束战斗
         useGameStore.setState((s: any) => ({
           extendedBattleState: {
@@ -224,7 +267,13 @@ export default function BattlePage() {
 
   const handleEndBattle = () => {
     endBattleExtended();
-    navigate('/');
+    // 如果有冒险状态，返回地图页；否则返回首页
+    const currentAdventure = useGameStore.getState().currentAdventure;
+    if (currentAdventure) {
+      navigate(`/map/${currentAdventure.continentId}`);
+    } else {
+      navigate('/');
+    }
   };
 
   const hpBarColor = (percent: number) => {

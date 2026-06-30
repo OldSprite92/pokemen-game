@@ -29,6 +29,10 @@ export interface Monster {
   exp: number;
   expToNext?: number; // 如果未设置，默认100
   fatigueEndTime?: Date; // 疲劳结束时间
+  description?: string; // 宝可梦描述/图鉴介绍
+  height?: number; // 身高(m)
+  weight?: number; // 体重(kg)
+  species?: string; // 种类/分类
   createdBy: 'user' | 'system';
   createdAt: Date;
 }

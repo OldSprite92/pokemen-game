@@ -17,16 +17,40 @@ function getSpeechRecognitionConstructor(): (new () => SpeechRecognitionInstance
   return ctor ?? null;
 }
 
+/** 请求麦克风权限 */
+async function requestMicrophonePermission(): Promise<boolean> {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // 获取权限后立即停止流，避免占用麦克风
+    stream.getTracks().forEach(track => track.stop());
+    return true;
+  } catch (err) {
+    console.error('麦克风权限申请失败:', err);
+    return false;
+  }
+}
+
 export default function VoiceInputButton({ onResult, lang = 'zh-CN' }: VoiceInputButtonProps) {
   const [isListening, setIsListening] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     const SpeechRecognition = getSpeechRecognitionConstructor();
     if (!SpeechRecognition) {
       alert('你的设备不支持语音输入，请手动输入哦！');
       return;
     }
+
+    // 先申请麦克风权限
+    const hasPermission = await requestMicrophonePermission();
+    if (!hasPermission) {
+      setPermissionDenied(true);
+      alert('需要麦克风权限才能使用语音输入哦！请在设置中允许访问麦克风。');
+      return;
+    }
+
+    setPermissionDenied(false);
 
     if (recognitionRef.current) {
       recognitionRef.current.stop();
@@ -51,9 +75,12 @@ export default function VoiceInputButton({ onResult, lang = 'zh-CN' }: VoiceInpu
     recognition.onerror = (event: SpeechRecognitionError) => {
       console.error('语音识别错误:', event.error);
       if (event.error === 'not-allowed') {
-        alert('请允许使用麦克风权限才能语音输入哦！');
+        setPermissionDenied(true);
+        alert('麦克风权限被拒绝，请在设置中允许访问麦克风。');
       } else if (event.error === 'no-speech') {
         alert('没有听到声音，请大声一点试试！');
+      } else if (event.error === 'aborted') {
+        // 用户主动取消，不提示错误
       } else {
         alert('语音识别出错了，请再试一次！');
       }
@@ -90,10 +117,12 @@ export default function VoiceInputButton({ onResult, lang = 'zh-CN' }: VoiceInpu
         transition-all duration-200 active:scale-95
         ${isListening
           ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/50'
-          : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/40 hover:text-blue-300'
+          : permissionDenied
+            ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/40'
+            : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/40 hover:text-blue-300'
         }
       `}
-      title={isListening ? '点击停止录音' : '点击语音输入'}
+      title={isListening ? '点击停止录音' : permissionDenied ? '麦克风权限被拒绝' : '点击语音输入'}
     >
       {isListening ? (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -113,4 +142,4 @@ export default function VoiceInputButton({ onResult, lang = 'zh-CN' }: VoiceInpu
   );
 }
 
-export { isSpeechRecognitionSupported };
+export { isSpeechRecognitionSupported, requestMicrophonePermission };

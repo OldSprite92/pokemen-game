@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { GameState, Monster, BattleState, Trainer, Adventure } from '../types';
 import { calculateDamage, determineFirstTurn, calculateExpGain, getExpToNextLevel, levelUp } from '../game/battleEngine';
 import type { DamageResult } from '../game/battleEngine';
+import { db } from '../db/database';
 
 export interface BattleAction {
   type: 'skill' | 'escape' | 'item' | 'switch';
@@ -59,6 +60,8 @@ interface ExtendedGameState extends GameState {
   checkBattleEnd: () => boolean;
   endBattleExtended: () => void;
   switchPlayerMonster: (monsterIndex: number) => boolean;
+  restoreTrainerFromDB: () => Promise<void>;
+  restoreAdventureFromDB: () => Promise<void>;
 }
 
 export const useGameStore = create<ExtendedGameState>((set, get) => ({
@@ -68,8 +71,51 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
   currentAdventure: null,
   wildMonster: null,
 
-  setCurrentTrainer: (trainer: Trainer | null) =>
-    set({ currentTrainer: trainer }),
+  // 从数据库恢复训练师状态（页面刷新后调用）
+  restoreTrainerFromDB: async () => {
+    try {
+      const trainers = await db.trainers.toArray();
+      if (trainers.length > 0) {
+        // 使用最新的训练师
+        const latest = trainers.sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0];
+        set({ currentTrainer: latest });
+      }
+    } catch (err) {
+      console.error('恢复训练师失败:', err);
+    }
+  },
+
+  // 从数据库恢复冒险状态（页面刷新后调用）
+  restoreAdventureFromDB: async () => {
+    try {
+      const adventures = await db.adventures.toArray();
+      if (adventures.length > 0) {
+        // 使用最新的未完成的冒险
+        const latest = adventures
+          .filter(a => !a.completedAt)
+          .sort((a, b) => {
+            const aTime = a.id || 0;
+            const bTime = b.id || 0;
+            return bTime - aTime;
+          })[0];
+        if (latest) {
+          set({ currentAdventure: latest });
+        }
+      }
+    } catch (err) {
+      console.error('恢复冒险状态失败:', err);
+    }
+  },
+
+  setCurrentTrainer: (trainer: Trainer | null) => {
+    set({ currentTrainer: trainer });
+    // 同时保存到数据库（更新现有训练师）
+    if (trainer && trainer.id) {
+      db.trainers.update(trainer.id, { ...trainer }).catch(err => console.error('更新训练师失败:', err));
+    }
+  },
 
   setWildMonster: (monster: Monster | null) =>
     set({ wildMonster: monster }),
@@ -79,8 +125,13 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
       battleState: { ...state.battleState, ...partial },
     })),
 
-  setCurrentAdventure: (adventure: Adventure | null) =>
-    set({ currentAdventure: adventure }),
+  setCurrentAdventure: (adventure: Adventure | null) => {
+    set({ currentAdventure: adventure });
+    // 同时保存到数据库
+    if (adventure) {
+      db.adventures.put(adventure).catch(err => console.error('保存冒险状态失败:', err));
+    }
+  },
 
   startBattle: (playerMonster: Monster, enemyMonster: Monster) =>
     set({

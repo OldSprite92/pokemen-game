@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../db/database';
+import { useGameStore } from '../stores/gameStore';
 import { ELEMENT_CONFIG } from '../components/create/StepElement';
 import { AVATAR_OPTIONS } from '../components/create/StepAvatar';
 import { generateRandomSkill } from '../game/rewardSystem';
+import { ALL_WILD_MONSTERS } from '../game/wildMonsters';
 import type { Monster, ElementType, EncounterRecord } from '../types';
 
 /** 技能石配置 */
@@ -30,6 +32,7 @@ const SKILL_STONE_CONFIG: Record<ElementType, { emoji: string; color: string; na
 };
 
 export default function PokedexPage() {
+  const currentTrainer = useGameStore((state) => state.currentTrainer);
   const [monsters, setMonsters] = useState<Monster[]>([]);
   const [encounters, setEncounters] = useState<EncounterRecord[]>([]);
   const [activeTab, setActiveTab] = useState<'owned' | 'encountered'>('owned');
@@ -39,12 +42,20 @@ export default function PokedexPage() {
   const [showSkillStone, setShowSkillStone] = useState(false);
   const [skillStones, setSkillStones] = useState<{ element: ElementType; id: string }[]>([]);
   const [useMessage, setUseMessage] = useState('');
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [isEncounterDetail, setIsEncounterDetail] = useState(false); // 区分遭遇记录详情
+
+  // 获取当前训练师的 localStorage key
+  const getStorageKey = (key: string) => {
+    const trainerId = currentTrainer?.id;
+    return trainerId ? `${key}_trainer_${trainerId}` : key;
+  };
 
   useEffect(() => {
     loadMonsters();
     loadEncounters();
     loadSkillStones();
-  }, []);
+  }, [currentTrainer]); // 当训练师变化时重新加载技能石
 
   const loadMonsters = async () => {
     try {
@@ -60,29 +71,39 @@ export default function PokedexPage() {
   const loadEncounters = async () => {
     try {
       const all = await db.encounters.toArray();
-      // 按怪物名称去重，保留最新的
       const unique = new Map<string, EncounterRecord>();
       all.forEach((e) => {
+        // 确保 encounteredAt 是 Date 对象
+        const encounterDate = e.encounteredAt instanceof Date ? e.encounteredAt : new Date(e.encounteredAt);
         const existing = unique.get(e.monsterName);
-        if (!existing || e.encounteredAt > existing.encounteredAt) {
-          unique.set(e.monsterName, e);
+        const existingDate = existing?.encounteredAt instanceof Date ? existing.encounteredAt : new Date(existing?.encounteredAt || 0);
+        if (!existing || encounterDate.getTime() > existingDate.getTime()) {
+          unique.set(e.monsterName, { ...e, encounteredAt: encounterDate });
         }
       });
-      setEncounters(Array.from(unique.values()));
+      // 按时间倒序排列（最新的在前面）
+      const sorted = Array.from(unique.values()).sort((a, b) => {
+        const dateA = a.encounteredAt instanceof Date ? a.encounteredAt : new Date(a.encounteredAt);
+        const dateB = b.encounteredAt instanceof Date ? b.encounteredAt : new Date(b.encounteredAt);
+        return dateB.getTime() - dateA.getTime();
+      });
+      setEncounters(sorted);
     } catch (err) {
       console.error('加载遭遇记录失败:', err);
     }
   };
 
   const loadSkillStones = () => {
-    const saved = localStorage.getItem('skillStones');
+    const saved = localStorage.getItem(getStorageKey('skillStones'));
     if (saved) {
       setSkillStones(JSON.parse(saved));
+    } else {
+      setSkillStones([]);
     }
   };
 
   const saveSkillStones = (stones: { element: ElementType; id: string }[]) => {
-    localStorage.setItem('skillStones', JSON.stringify(stones));
+    localStorage.setItem(getStorageKey('skillStones'), JSON.stringify(stones));
     setSkillStones(stones);
   };
 
@@ -168,6 +189,325 @@ export default function PokedexPage() {
     return ELEMENT_CONFIG[element]?.emoji || '❓';
   };
 
+  const getStatPercent = (value: number) => {
+    const max = 150;
+    return Math.min((value / max) * 100, 100);
+  };
+
+  const getStatColor = (stat: string) => {
+    const colors: Record<string, string> = {
+      hp: '#ef4444',
+      attack: '#f97316',
+      defense: '#eab308',
+      spAttack: '#3b82f6',
+      spDefense: '#22c55e',
+      speed: '#a855f7',
+    };
+    return colors[stat] || '#9ca3af';
+  };
+
+  const getTotalStats = (m: Monster) => {
+    return m.hp + m.attack + m.defense + m.speed;
+  };
+
+  const getDescription = (m: Monster) => {
+    if (m.description) return m.description;
+    const descs: Record<string, string> = {
+      fire: '体内蕴含着炽热的火焰能量，情绪激动时体温会急剧上升。',
+      water: '喜欢生活在清澈的水域附近，能操控水流进行攻击。',
+      grass: '身上长满了翠绿的植物，能通过光合作用恢复体力。',
+      electric: '体内储存着强大的电能，奔跑时会产生静电火花。',
+      normal: '性格温和，适应力极强，在各种环境中都能生存。',
+      ice: '体温极低，呼出的气息能瞬间凝结成冰晶。',
+      fighting: '天生就是格斗高手，每天都在寻找更强的对手。',
+      poison: '体内流淌着剧毒液体，皮肤接触就会中毒。',
+      ground: '擅长挖掘地道，能在地下自由穿行。',
+      flying: '拥有轻盈的翅膀，能在高空中优雅地翱翔。',
+      psychic: '拥有强大的精神力量，能读取他人的思想。',
+      bug: '虽然体型小巧，但拥有惊人的繁殖能力和适应力。',
+      rock: '身体坚硬如岩石，普通的攻击根本无法伤其分毫。',
+      ghost: '来无影去无踪，常常在深夜出现在古老遗迹中。',
+      dragon: '传说中的存在，拥有毁天灭地的恐怖力量。',
+      dark: '潜伏在阴影之中，擅长出其不意地发动攻击。',
+      steel: '全身覆盖着坚不可摧的钢铁铠甲，防御力惊人。',
+      fairy: '拥有神奇的治愈能力，能给人们带来好运。',
+      light: '散发着耀眼的光芒，能驱散一切黑暗与邪恶。',
+    };
+    return descs[m.element] || '这是一只神秘的宝可梦，等待着训练师去发现它的秘密。';
+  };
+
+  const getSpecies = (m: Monster) => {
+    if (m.species) return m.species;
+    const speciesMap: Record<string, string> = {
+      fire: '火焰宝可梦', water: '水栖宝可梦', grass: '草苗宝可梦',
+      electric: '电气宝可梦', normal: '一般宝可梦', ice: '冰雪宝可梦',
+      fighting: '格斗宝可梦', poison: '毒液宝可梦', ground: '地面宝可梦',
+      flying: '飞行宝可梦', psychic: '超能宝可梦', bug: '虫虫宝可梦',
+      rock: '岩石宝可梦', ghost: '幽灵宝可梦', dragon: '龙之宝可梦',
+      dark: '恶之宝可梦', steel: '钢铁宝可梦', fairy: '妖精宝可梦',
+      light: '光明宝可梦',
+    };
+    return speciesMap[m.element] || '未知宝可梦';
+  };
+
+  const renderDetailModal = () => {
+    if (!showDetailModal || !selectedMonster) return null;
+    return (
+      <div
+        className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setShowDetailModal(false);
+        }}
+      >
+        <div className="pixel-border rounded-2xl bg-gray-900 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          {/* 顶部关闭按钮 */}
+          <div className="flex items-center justify-end p-3">
+            <button
+              onClick={() => setShowDetailModal(false)}
+              className="text-gray-400 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-700 transition-all"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* 头部信息区 */}
+          <div className="px-6 pb-4">
+            <div className="flex items-center gap-4">
+              {/* 左侧大图 */}
+              <div
+                className="w-24 h-24 rounded-2xl flex items-center justify-center text-5xl flex-shrink-0 relative"
+                style={{ backgroundColor: getElementColor(selectedMonster.element) + '25' }}
+              >
+                {getAvatarEmoji(selectedMonster.avatar)}
+                <div
+                  className="absolute inset-0 rounded-2xl opacity-20"
+                  style={{ background: `radial-gradient(circle at 30% 30%, ${getElementColor(selectedMonster.element)}, transparent 70%)` }}
+                />
+              </div>
+
+              {/* 右侧基本信息 */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs text-gray-500 font-mono">#{String(selectedMonster.id || 0).padStart(4, '0')}</span>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-1">{selectedMonster.name}</h2>
+                <p className="text-sm text-gray-400 mb-2">{getSpecies(selectedMonster)}</p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-xs px-3 py-1 rounded-full font-bold"
+                    style={{
+                      backgroundColor: getElementColor(selectedMonster.element) + '30',
+                      color: getElementColor(selectedMonster.element),
+                    }}
+                  >
+                    {getElementEmoji(selectedMonster.element)} {ELEMENT_CONFIG[selectedMonster.element]?.label}
+                  </span>
+                  <span className="text-xs px-3 py-1 rounded-full bg-gray-700 text-gray-300 font-bold">
+                    Lv.{selectedMonster.level}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 描述 */}
+            <div className="mt-4 p-3 rounded-xl bg-gray-800/50">
+              <p className="text-sm text-gray-300 leading-relaxed">{getDescription(selectedMonster)}</p>
+            </div>
+          </div>
+
+          {/* 种族值 */}
+          <div className="px-6 pb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-gray-400">种族值</h3>
+              <span className="text-sm font-bold text-yellow-400">合计 {getTotalStats(selectedMonster)}</span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {[
+                { key: 'hp', label: 'HP', value: selectedMonster.hp },
+                { key: 'attack', label: '攻击', value: selectedMonster.attack },
+                { key: 'defense', label: '防御', value: selectedMonster.defense },
+                { key: 'spAttack', label: '特攻', value: Math.round(selectedMonster.attack * 0.9) },
+                { key: 'spDefense', label: '特防', value: Math.round(selectedMonster.defense * 0.9) },
+                { key: 'speed', label: '速度', value: selectedMonster.speed },
+              ].map((stat) => (
+                <div key={stat.key} className="flex items-center gap-3">
+                  <span className="text-xs text-gray-400 w-10 text-right">{stat.label}</span>
+                  <div className="flex-1 h-2.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${getStatPercent(stat.value)}%`,
+                        backgroundColor: getStatColor(stat.key),
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs font-bold text-white w-8 text-right">{stat.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 基本信息网格 */}
+          <div className="px-6 pb-4">
+            <h3 className="text-sm font-bold text-gray-400 mb-3">基本信息</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 rounded-xl bg-gray-800/50">
+                <p className="text-xs text-gray-500 mb-1">身高</p>
+                <p className="text-sm font-bold text-white">{selectedMonster.height ? `${selectedMonster.height} m` : '?.? m'}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-gray-800/50">
+                <p className="text-xs text-gray-500 mb-1">体重</p>
+                <p className="text-sm font-bold text-white">{selectedMonster.weight ? `${selectedMonster.weight} kg` : '??.? kg'}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-gray-800/50">
+                <p className="text-xs text-gray-500 mb-1">HP</p>
+                <p className="text-sm font-bold text-white">{selectedMonster.hp} / {selectedMonster.maxHp || selectedMonster.hp}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-gray-800/50">
+                <p className="text-xs text-gray-500 mb-1">经验值</p>
+                <p className="text-sm font-bold text-white">{selectedMonster.exp} / {selectedMonster.expToNext || 100}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 技能列表 - 仅我的宝可梦显示 */}
+          {!isEncounterDetail && (
+            <div className="px-6 pb-4">
+              <h3 className="text-sm font-bold text-gray-400 mb-3">技能</h3>
+              <div className="flex flex-col gap-2">
+                {selectedMonster.skills.map((skill) => (
+                  <div
+                    key={skill.id}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-gray-800/50"
+                  >
+                    <span
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
+                      style={{ backgroundColor: getElementColor(skill.element) + '30' }}
+                    >
+                      {getElementEmoji(skill.element)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-white">{skill.name}</p>
+                      <p className="text-xs text-gray-500">{skill.description}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-xs text-gray-400">威力{skill.power}</p>
+                      <p className="text-xs text-gray-400">命中{skill.accuracy}%</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 底部按钮 - 仅我的宝可梦显示操作按钮 */}
+          {!isEncounterDetail && (
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDetailModal(false);
+                  setShowSkillDetail(true);
+                }}
+                className="flex-1 bg-purple-500 text-white py-3 rounded-xl font-bold hover:bg-purple-400 transition-all"
+              >
+                💎 技能管理
+              </button>
+              <button
+                onClick={() => selectedMonster.id && handleDelete(selectedMonster.id)}
+                className="px-4 bg-red-500/20 text-red-400 py-3 rounded-xl font-bold hover:bg-red-500/30 transition-all"
+              >
+                🗑️
+              </button>
+            </div>
+          )}
+          {isEncounterDetail && (
+            <div className="px-6 pb-6">
+              {/* 遭遇信息 */}
+              <div className="p-3 rounded-xl bg-gray-800/50 mb-3">
+                <h3 className="text-sm font-bold text-yellow-400 mb-2">🗺️ 遭遇信息</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-gray-500">遭遇地点：</span>
+                    <span className="text-white">{(() => {
+                      const enc = encounters.find(e => e.monsterName === selectedMonster.name);
+                      return enc?.continentName || '未知大陆';
+                    })()}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">遭遇时间：</span>
+                    <span className="text-white">
+                      {selectedMonster.createdAt ? new Date(selectedMonster.createdAt).toLocaleDateString('zh-CN') : '未知'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">等级：</span>
+                    <span className="text-white">Lv.{selectedMonster.level}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">状态：</span>
+                    <span className="text-white">
+                      {(() => {
+                        const enc = encounters.find(e => e.monsterName === selectedMonster.name);
+                        if (enc?.captured) return '✅ 已捕获';
+                        if (enc?.defeated) return '⚔️ 已击败';
+                        return '👁️ 已遭遇';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 可能携带的技能 */}
+              <div className="p-3 rounded-xl bg-gray-800/50">
+                <h3 className="text-sm font-bold text-yellow-400 mb-2">⚔️ 技能</h3>
+                <p className="text-xs text-gray-500 mb-2">
+                  这是野生宝可梦使用的技能，在战斗中要小心哦！
+                </p>
+                <div className="flex flex-col gap-2">
+                  {selectedMonster.skills && selectedMonster.skills.length > 0 ? (
+                    selectedMonster.skills.map((skill) => (
+                      <div
+                        key={skill.id}
+                        className="flex items-center gap-3 p-2 rounded-lg bg-gray-700/50"
+                      >
+                        <span
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
+                          style={{ backgroundColor: getElementColor(skill.element) + '30' }}
+                        >
+                          {getElementEmoji(skill.element)}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-white">{skill.name}</p>
+                          <p className="text-xs text-gray-400">{skill.description}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-xs text-gray-400">威力{skill.power}</p>
+                          <p className="text-xs text-gray-400">命中{skill.accuracy}%</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-2">
+                      该野生宝可梦的技能信息未记录
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* 提示 */}
+              <div className="mt-3 p-3 rounded-xl bg-blue-900/20 border border-blue-500/20 text-center">
+                <p className="text-sm text-blue-300">
+                  💡 在冒险中捕获这只宝可梦，就可以让它成为你的伙伴啦！
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
@@ -236,10 +576,10 @@ export default function PokedexPage() {
                   key={monster.id}
                   onClick={() => {
                     setSelectedMonster(monster);
-                    setShowSkillDetail(true);
-                    setShowSkillStone(false);
+                    setIsEncounterDetail(false); // 我的宝可梦
+                    setShowDetailModal(true);
                   }}
-                  className={`pixel-border rounded-xl p-4 cursor-pointer transition-all active:scale-95 ${
+                  className={`pixel-border rounded-xl p-4 cursor-pointer transition-all active:scale-95 hover:scale-[1.02] ${
                     selectedMonster?.id === monster.id
                       ? 'bg-yellow-500/10 border-yellow-400'
                       : 'bg-gray-800/50 hover:bg-gray-700/50'
@@ -300,10 +640,36 @@ export default function PokedexPage() {
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {encounters.map((encounter) => (
+              {encounters.map((encounter, index) => (
                 <div
-                  key={encounter.monsterName}
-                  className="pixel-border rounded-xl p-4 bg-gray-800/50"
+                  key={`${encounter.monsterName}-${encounter.encounteredAt}-${index}`}
+                  onClick={() => {
+                    // 从野生宝可梦配置中查找对应的技能
+                    const wildConfig = ALL_WILD_MONSTERS.find(
+                      (config) => config.monster.name === encounter.monsterName
+                    );
+                    const wildSkills = wildConfig?.monster.skills || [];
+                    const mockMonster: Monster = {
+                      id: undefined,
+                      name: encounter.monsterName,
+                      element: encounter.monsterElement,
+                      skills: wildSkills,
+                      avatar: encounter.monsterAvatar,
+                      hp: 50 + encounter.monsterLevel * 5,
+                      maxHp: 50 + encounter.monsterLevel * 5,
+                      attack: 30 + encounter.monsterLevel * 3,
+                      defense: 25 + encounter.monsterLevel * 2,
+                      speed: 20 + encounter.monsterLevel * 2,
+                      level: encounter.monsterLevel,
+                      exp: 0,
+                      createdBy: 'system',
+                      createdAt: encounter.encounteredAt,
+                    };
+                    setSelectedMonster(mockMonster);
+                    setIsEncounterDetail(true); // 遭遇记录
+                    setShowDetailModal(true);
+                  }}
+                  className="pixel-border rounded-xl p-4 bg-gray-800/50 cursor-pointer transition-all active:scale-95 hover:scale-[1.02] hover:bg-gray-700/50"
                 >
                   <div className="flex items-center gap-4">
                     <div
@@ -341,6 +707,9 @@ export default function PokedexPage() {
           )}
         </>
       )}
+
+      {/* 精美详情弹窗 - 使用函数调用来避免Tree Shaking */}
+      {renderDetailModal()}
 
       {/* 技能详情弹窗 */}
       {showSkillDetail && selectedMonster && (

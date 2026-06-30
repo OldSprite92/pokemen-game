@@ -13,6 +13,7 @@ import type { ElementType, Monster } from '../types';
 interface SkillEntry {
   name: string;
   description: string;
+  element?: ElementType;
 }
 
 const STEPS = [
@@ -71,7 +72,7 @@ export default function CreatePage() {
       .map((s, i) => ({
         id: `skill-${Date.now()}-${i}`,
         name: s.name.trim(),
-        element: elements[0] || 'fire',
+        element: s.element || elements[0] || 'fire',
         power: 15 + Math.floor(Math.random() * 16), // 15-30
         accuracy: 90 + Math.floor(Math.random() * 11), // 90-100
         description: s.description.trim() || `${s.name.trim()}攻击`,

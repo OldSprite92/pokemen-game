@@ -51,6 +51,7 @@ function createWildMonster(): Monster {
 export default function BattleSelectPage() {
   const navigate = useNavigate();
   const { startBattleExtended } = useGameStore();
+  const wildMonster = useGameStore((state) => state.wildMonster);
   const [monsters, setMonsters] = useState<Monster[]>([]);
   const [selectedMonster, setSelectedMonster] = useState<Monster | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,8 +65,9 @@ export default function BattleSelectPage() {
 
   const handleStartBattle = () => {
     if (!selectedMonster) return;
-    const wildMonster = createWildMonster();
-    startBattleExtended(selectedMonster, wildMonster);
+    // 使用 store 中的野生宝可梦（从地图页传入的）
+    const enemyMonster = wildMonster || createWildMonster();
+    startBattleExtended(selectedMonster, enemyMonster);
     navigate('/battle');
   };
 
