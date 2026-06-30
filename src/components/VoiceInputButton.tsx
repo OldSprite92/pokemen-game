@@ -1,56 +1,80 @@
 import { useState, useRef, useCallback } from 'react';
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
+import { Capacitor } from '@capacitor/core';
 
 interface VoiceInputButtonProps {
   onResult: (text: string) => void;
   lang?: string;
 }
 
-/** 检测浏览器是否支持语音识别 */
+/** 检测是否支持语音识别（Web 或 Capacitor 原生） */
 function isSpeechRecognitionSupported(): boolean {
+  if (Capacitor.isNativePlatform()) {
+    return true;
+  }
   return 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
 }
 
-/** 获取 SpeechRecognition 构造函数 */
+/** 获取 Web SpeechRecognition 构造函数 */
 function getSpeechRecognitionConstructor(): (new () => SpeechRecognitionInstance) | null {
   const w = window as unknown as Record<string, unknown>;
   const ctor = (w.SpeechRecognition || w.webkitSpeechRecognition) as (new () => SpeechRecognitionInstance) | undefined;
   return ctor ?? null;
 }
 
-/** 请求麦克风权限 */
-async function requestMicrophonePermission(): Promise<boolean> {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    // 获取权限后立即停止流，避免占用麦克风
-    stream.getTracks().forEach(track => track.stop());
-    return true;
-  } catch (err) {
-    console.error('麦克风权限申请失败:', err);
-    return false;
-  }
-}
-
 export default function VoiceInputButton({ onResult, lang = 'zh-CN' }: VoiceInputButtonProps) {
   const [isListening, setIsListening] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const isNative = Capacitor.isNativePlatform();
 
-  const startListening = useCallback(async () => {
+  /** 使用 Capacitor 原生语音识别 */
+  const startNativeListening = useCallback(async () => {
+    try {
+      // 检查权限状态
+      const permission = await SpeechRecognition.checkPermissions();
+      
+      if (permission.speechRecognition !== 'granted') {
+        // 申请权限 - 这会直接调用 Android 原生权限弹窗
+        const requestResult = await SpeechRecognition.requestPermissions();
+        if (requestResult.speechRecognition !== 'granted') {
+          setPermissionDenied(true);
+          alert('需要麦克风权限才能使用语音输入哦！');
+          return;
+        }
+      }
+
+      setPermissionDenied(false);
+      setIsListening(true);
+
+      // 开始原生语音识别 - 直接返回结果
+      const result = await SpeechRecognition.start({
+        language: lang,
+        maxResults: 1,
+        prompt: '请说话...',
+        popup: true,
+        partialResults: false,
+      });
+
+      if (result.matches && result.matches.length > 0) {
+        onResult(result.matches[0]);
+      }
+      setIsListening(false);
+
+    } catch (err) {
+      console.error('启动语音识别失败:', err);
+      alert('语音识别启动失败，请重试！');
+      setIsListening(false);
+    }
+  }, [lang, onResult]);
+
+  /** 使用 Web SpeechRecognition */
+  const startWebListening = useCallback(() => {
     const SpeechRecognition = getSpeechRecognitionConstructor();
     if (!SpeechRecognition) {
       alert('你的设备不支持语音输入，请手动输入哦！');
       return;
     }
-
-    // 先申请麦克风权限
-    const hasPermission = await requestMicrophonePermission();
-    if (!hasPermission) {
-      setPermissionDenied(true);
-      alert('需要麦克风权限才能使用语音输入哦！请在设置中允许访问麦克风。');
-      return;
-    }
-
-    setPermissionDenied(false);
 
     if (recognitionRef.current) {
       recognitionRef.current.stop();
@@ -96,13 +120,28 @@ export default function VoiceInputButton({ onResult, lang = 'zh-CN' }: VoiceInpu
     recognition.start();
   }, [lang, onResult]);
 
-  const stopListening = useCallback(() => {
+  const stopWebListening = useCallback(() => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
     setIsListening(false);
   }, []);
+
+  const startListening = useCallback(() => {
+    if (isNative) {
+      startNativeListening();
+    } else {
+      startWebListening();
+    }
+  }, [isNative, startNativeListening, startWebListening]);
+
+  const stopListening = useCallback(() => {
+    if (!isNative) {
+      stopWebListening();
+    }
+    setIsListening(false);
+  }, [isNative, stopWebListening]);
 
   if (!isSpeechRecognitionSupported()) {
     return null;
@@ -142,4 +181,4 @@ export default function VoiceInputButton({ onResult, lang = 'zh-CN' }: VoiceInpu
   );
 }
 
-export { isSpeechRecognitionSupported, requestMicrophonePermission };
+export { isSpeechRecognitionSupported };
