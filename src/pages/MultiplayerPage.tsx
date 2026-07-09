@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useMultiplayer } from '../hooks/useMultiplayer';
 import { useGameStore } from '../stores/gameStore';
 import { db } from '../db/database';
-import { TRAINER_AVATARS } from './TrainerPage';
+import TrainerAvatar from '../components/TrainerAvatar';
+import VoiceTextInput from '../components/VoiceTextInput';
 import type { Monster } from '../types';
 
 export default function MultiplayerPage() {
@@ -37,16 +38,20 @@ export default function MultiplayerPage() {
     }
   }, [mp.gameState, mp.mode, mp.continentId, navigate]);
 
-  const handleCreateRoom = () => {
+  const handleCreateRoom = async () => {
     if (!currentTrainer) return;
-    mp.createRoom(currentTrainer.name, currentTrainer.avatar, selectedMode);
-    setView('room');
+    const created = await mp.createRoom(currentTrainer.name, currentTrainer.avatar, selectedMode);
+    if (created) {
+      setView('room');
+    }
   };
 
-  const handleJoinRoom = () => {
+  const handleJoinRoom = async () => {
     if (!currentTrainer || !joinRoomId.trim()) return;
-    mp.joinRoom(joinRoomId.trim(), currentTrainer.name, currentTrainer.avatar);
-    setView('room');
+    const joined = await mp.joinRoom(joinRoomId.trim(), currentTrainer.name, currentTrainer.avatar);
+    if (joined) {
+      setView('room');
+    }
   };
 
   const handleReady = () => {
@@ -71,13 +76,9 @@ export default function MultiplayerPage() {
     );
   };
 
-  const getAvatarEmoji = (avatarId: string) => {
-    return TRAINER_AVATARS[avatarId]?.emoji || '❓';
-  };
-
   if (view === 'menu') {
     return (
-      <div className="flex flex-col min-h-screen p-4 gap-4">
+      <div className="multiplayer-page flex flex-col min-h-[100dvh] p-4 gap-4">
         <div className="flex items-center justify-between">
           <Link to="/" className="text-blue-400 hover:text-blue-300 text-lg font-bold">
             ← 返回
@@ -89,7 +90,40 @@ export default function MultiplayerPage() {
         {!mp.connected && (
           <div className="pixel-border rounded-xl p-4 bg-red-900/30 text-center">
             <p className="text-red-300">⚠️ 未连接到服务器</p>
-            <p className="text-sm text-gray-400">请确保服务器已启动: npm run server</p>
+            <p className="text-sm text-gray-400">房主可以直接点“创建房间”，系统会自动连接房间服务</p>
+            
+            {/* 自动扫描局域网 */}
+            <div className="mt-3 flex flex-col gap-2">
+              <button
+                onClick={() => mp.scanHosts()}
+                disabled={mp.isScanning}
+                className="bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-400 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {mp.isScanning ? '🔍 正在寻找房间...' : '🔍 自动寻找房间'}
+              </button>
+              
+              {/* 扫描结果 */}
+              {mp.discoveredHosts.length > 0 && (
+                <div className="flex flex-col gap-2 mt-2">
+                  <p className="text-xs text-green-400">✅ 找到以下房间：</p>
+                  {mp.discoveredHosts.map((host) => (
+                    <button
+                      key={host.ip}
+                      onClick={() => mp.connect(host.url)}
+                      className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-500 active:scale-95 transition-all"
+                    >
+                      🏠 加入房间 ({host.ip}) - {host.latency}ms
+                    </button>
+                  ))}
+                </div>
+              )}
+              
+              {!mp.isScanning && mp.discoveredHosts.length === 0 && (
+                <p className="text-xs text-gray-500">
+                  💡 点击"自动寻找房间"搜索同一WiFi下的游戏房间
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -108,7 +142,7 @@ export default function MultiplayerPage() {
             </Link>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center gap-6">
+          <div className="multiplayer-workspace flex-1 flex flex-col items-center justify-center gap-6 min-h-0 overflow-y-auto">
             <div className="text-6xl">🌐</div>
             <h2 className="text-2xl font-bold text-yellow-300 pixel-title text-center">
               家庭联机对战
@@ -120,17 +154,17 @@ export default function MultiplayerPage() {
             <div className="flex flex-col gap-4 w-full max-w-sm">
               <button
                 onClick={() => setView('create')}
-                disabled={!mp.connected}
+                disabled={mp.isConnecting}
                 className="bg-green-500 text-white text-xl font-bold py-4 rounded-xl hover:bg-green-400 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                🏠 创建房间
+                {mp.isConnecting ? '正在连接...' : '🏠 创建房间'}
               </button>
               <button
                 onClick={() => setView('join')}
-                disabled={!mp.connected}
+                disabled={mp.isConnecting}
                 className="bg-blue-500 text-white text-xl font-bold py-4 rounded-xl hover:bg-blue-400 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                🔑 加入房间
+                {mp.isConnecting ? '正在连接...' : '🔑 加入房间'}
               </button>
             </div>
 
@@ -145,7 +179,7 @@ export default function MultiplayerPage() {
 
   if (view === 'create') {
     return (
-      <div className="flex flex-col min-h-screen p-4 gap-4">
+      <div className="multiplayer-page flex flex-col min-h-[100dvh] p-4 gap-4">
         <div className="flex items-center justify-between">
           <button onClick={() => setView('menu')} className="text-blue-400 hover:text-blue-300 text-lg font-bold">
             ← 返回
@@ -154,7 +188,7 @@ export default function MultiplayerPage() {
           <div className="w-12" />
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center gap-6">
+        <div className="multiplayer-workspace flex-1 flex flex-col items-center justify-center gap-6 min-h-0 overflow-y-auto">
           <div className="text-6xl">🏠</div>
           <p className="text-lg text-gray-300 text-center">
             选择游戏模式，创建房间后告诉家人房间号
@@ -188,10 +222,20 @@ export default function MultiplayerPage() {
 
           <button
             onClick={handleCreateRoom}
-            className="bg-green-500 text-white text-xl font-bold py-4 px-8 rounded-xl hover:bg-green-400 active:scale-95 transition-all"
+            disabled={mp.isConnecting}
+            className="bg-green-500 text-white text-xl font-bold py-4 px-8 rounded-xl hover:bg-green-400 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            ✅ 创建房间
+            {mp.isConnecting ? '正在连接房间服务...' : '✅ 创建房间'}
           </button>
+
+          {mp.error && (
+            <div className="pixel-border rounded-xl p-3 bg-red-900/30 text-center max-w-sm">
+              <p className="text-red-300 text-sm">{mp.error}</p>
+              <button onClick={mp.clearError} className="text-sm text-gray-400 mt-1">
+                关闭
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -199,7 +243,7 @@ export default function MultiplayerPage() {
 
   if (view === 'join') {
     return (
-      <div className="flex flex-col min-h-screen p-4 gap-4">
+      <div className="multiplayer-page flex flex-col min-h-[100dvh] p-4 gap-4">
         <div className="flex items-center justify-between">
           <button onClick={() => setView('menu')} className="text-blue-400 hover:text-blue-300 text-lg font-bold">
             ← 返回
@@ -208,30 +252,41 @@ export default function MultiplayerPage() {
           <div className="w-12" />
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center gap-6">
+        <div className="multiplayer-workspace flex-1 flex flex-col items-center justify-center gap-6 min-h-0 overflow-y-auto">
           <div className="text-6xl">🔑</div>
           <p className="text-lg text-gray-300 text-center">
             输入房主告诉你的房间号
           </p>
-          <input
+          <VoiceTextInput
             type="text"
             value={joinRoomId}
-            onChange={(e) => setJoinRoomId(e.target.value.toUpperCase())}
+            onChangeText={(value) => setJoinRoomId(value.toUpperCase())}
+            voiceTransform={(value) => value.replace(/\s/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6)}
             placeholder="房间号"
+            wrapperClassName="w-full max-w-xs"
             className="bg-gray-800 border-2 border-yellow-400/50 rounded-xl px-6 py-4 text-white text-2xl font-bold text-center w-full max-w-xs uppercase"
             maxLength={6}
           />
           <button
             onClick={handleJoinRoom}
-            disabled={!joinRoomId.trim()}
+            disabled={!joinRoomId.trim() || mp.isConnecting}
             className={`text-xl font-bold py-4 px-8 rounded-xl transition-all ${
-              joinRoomId.trim()
+              joinRoomId.trim() && !mp.isConnecting
                 ? 'bg-blue-500 text-white hover:bg-blue-400 active:scale-95'
                 : 'bg-gray-800 text-gray-600 cursor-not-allowed'
             }`}
           >
-            🔑 加入
+            {mp.isConnecting ? '正在连接...' : '🔑 加入'}
           </button>
+
+          {mp.error && (
+            <div className="pixel-border rounded-xl p-3 bg-red-900/30 text-center max-w-sm">
+              <p className="text-red-300 text-sm">{mp.error}</p>
+              <button onClick={mp.clearError} className="text-sm text-gray-400 mt-1">
+                关闭
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -241,7 +296,7 @@ export default function MultiplayerPage() {
   const isReady = me?.isReady || false;
 
   return (
-    <div className="flex flex-col min-h-screen p-4 gap-4">
+    <div className="multiplayer-page flex flex-col min-h-[100dvh] p-4 gap-4">
       <div className="flex items-center justify-between">
         <button onClick={handleLeave} className="text-red-400 hover:text-red-300 text-lg font-bold">
           ← 退出
@@ -267,7 +322,12 @@ export default function MultiplayerPage() {
               player.isReady ? 'bg-green-900/30' : 'bg-gray-800/50'
             }`}
           >
-            <span className="text-2xl">{getAvatarEmoji(player.avatar)}</span>
+            <TrainerAvatar
+              avatar={player.avatar}
+              className="w-10 h-10 rounded-lg"
+              imageClassName="w-full h-full object-cover rounded-lg"
+              emojiClassName="text-2xl"
+            />
             <div className="flex-1">
               <p className="font-bold text-white">
                 {player.name}

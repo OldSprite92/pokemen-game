@@ -24,6 +24,7 @@ describe('🐛 Bug 发现测试 - 数据持久化与状态管理', () => {
         isActive: false, playerMonster: null, enemyMonster: null, turn: 'player', log: [],
         playerCurrentHp: 0, enemyCurrentHp: 0, turnCount: 0, isOver: false, winner: null,
         lastDamageResult: null, expGained: 0, leveledUp: false, playerTeam: [], activePlayerIndex: 0, isPVP: false,
+        playerStatuses: [], enemyStatuses: [],
       },
       currentAdventure: null,
       wildMonster: null,

@@ -13,6 +13,18 @@ export interface Skill {
   description: string;
 }
 
+/** 战斗负面状态 */
+export type BattleStatusType = 'burn' | 'poison' | 'paralysis' | 'freeze' | 'bind' | 'fear';
+
+/** 战斗中挂在一方身上的状态 */
+export interface BattleStatus {
+  type: BattleStatusType;
+  turnsRemaining: number;
+  damagePerTurn?: number;
+  skipChance?: number;
+  sourceSkillName: string;
+}
+
 /** 宝可梦（怪物） */
 export interface Monster {
   id?: number;
@@ -33,6 +45,9 @@ export interface Monster {
   height?: number; // 身高(m)
   weight?: number; // 体重(kg)
   species?: string; // 种类/分类
+  personality?: string; // 性格
+  favoriteThing?: string; // 喜欢的东西
+  catchphrase?: string; // 口头禅/叫声
   createdBy: 'user' | 'system';
   createdAt: Date;
 }
@@ -84,6 +99,9 @@ export interface Trainer {
 /** 格子类型 */
 export type CellType = 'start' | 'empty' | 'wild' | 'treasure' | 'rest' | 'boss' | 'blocked';
 
+/** 地图难度 */
+export type MapDifficulty = 'easy' | 'hard' | 'hell';
+
 /** 格子 */
 export interface MapCell {
   x: number;
@@ -116,15 +134,55 @@ export interface AdventureEvent {
   description: string;
   completed: boolean;
   reward?: { exp?: number; hp?: number };
+  cellType?: CellType;
+  parentPrompt?: string;
 }
 
 /** 冒险记录 */
 export interface Adventure {
   id?: number;
   continentId: string;
+  difficulty?: MapDifficulty;
   currentPosition: { x: number; y: number };
   events: AdventureEvent[];
+  chapterGoalId?: string;
+  taskIds?: string[];
+  completedTaskIds?: string[];
+  storyFragmentIds?: string[];
+  pendingBattleType?: 'wild' | 'boss';
   completedAt?: Date;
+}
+
+/** 徽章 */
+export interface Badge {
+  id?: number;
+  trainerId?: number;
+  continentId: string;
+  difficulty?: MapDifficulty;
+  name: string;
+  emoji: string;
+  earnedAt: Date;
+}
+
+/** 贴纸 */
+export interface Sticker {
+  id?: number;
+  trainerId?: number;
+  stickerId: string;
+  name: string;
+  emoji: string;
+  continentId: string;
+  earnedAt: Date;
+}
+
+/** 冒险日记 */
+export interface AdventureDiaryEntry {
+  id?: number;
+  trainerId?: number;
+  continentId: string;
+  title: string;
+  text: string;
+  createdAt: Date;
 }
 
 /** 遭遇记录 */

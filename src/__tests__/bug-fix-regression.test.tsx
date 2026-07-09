@@ -22,6 +22,7 @@ describe('🐛 Bug 修复回归测试', () => {
         isActive: false, playerMonster: null, enemyMonster: null, turn: 'player', log: [],
         playerCurrentHp: 0, enemyCurrentHp: 0, turnCount: 0, isOver: false, winner: null,
         lastDamageResult: null, expGained: 0, leveledUp: false, playerTeam: [], activePlayerIndex: 0, isPVP: false,
+        playerStatuses: [], enemyStatuses: [],
       },
       currentAdventure: null,
       wildMonster: null,

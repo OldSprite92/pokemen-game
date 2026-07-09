@@ -96,7 +96,7 @@ export default function BattleSelectPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen p-4 gap-4">
+    <div className="battle-select-page flex flex-col min-h-[100dvh] p-4 gap-4">
       <div className="flex items-center justify-between">
         <button
           onClick={() => navigate('/')}
@@ -111,7 +111,7 @@ export default function BattleSelectPage() {
       <p className="text-center text-lg text-gray-300">选择你的宝可梦去战斗！</p>
 
       {/* 宝可梦列表 */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 min-h-0 overflow-y-auto">
         {monsters.map((monster) => {
           const avatar = AVATAR_OPTIONS.find((a) => a.id === monster.avatar);
           const element = ELEMENT_CONFIG[monster.element];

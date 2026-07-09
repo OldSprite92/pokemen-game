@@ -288,8 +288,9 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🎮 联机服务器运行在端口 ${PORT}`);
-  console.log(`📡 局域网地址: http://localhost:${PORT}`);
+  console.log(`📡 局域网地址: http://<你的电脑IP>:${PORT}`);
+  console.log(`   请使用 ifconfig/ipconfig 查看本机 IP 地址`);
 });

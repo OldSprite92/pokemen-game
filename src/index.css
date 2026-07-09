@@ -196,3 +196,160 @@ body {
   color: white;
   overflow-x: hidden;
 }
+
+@media (orientation: landscape) and (min-width: 900px) {
+  .home-page,
+  .create-page,
+  .trainer-page,
+  .adventure-page,
+  .multiplayer-page,
+  .map-page,
+  .battle-page,
+  .battle-select-page,
+  .pokedex-page {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    padding: 12px 18px;
+    gap: 10px;
+  }
+
+  .pokedex-page {
+    overflow-y: auto;
+  }
+
+  .home-page {
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) minmax(520px, 1fr) minmax(260px, 340px);
+    grid-template-rows: auto auto 1fr;
+    align-items: center;
+    justify-items: stretch;
+    column-gap: 18px;
+  }
+
+  .home-title {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+  }
+
+  .home-trainer {
+    grid-column: 1;
+    grid-row: 2;
+    max-width: none;
+  }
+
+  .home-current {
+    grid-column: 1;
+    grid-row: 3;
+    align-self: start;
+    max-width: none;
+  }
+
+  .home-daily {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    max-width: none;
+  }
+
+  .home-parent {
+    grid-column: 3;
+    grid-row: 3;
+    align-self: start;
+    max-width: none;
+  }
+
+  .home-menu {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: center;
+    gap: 12px;
+    max-width: none;
+  }
+
+  .home-monsters,
+  .home-divider,
+  .home-tip {
+    display: none;
+  }
+
+  .home-menu a {
+    height: 86px;
+    font-size: 20px;
+  }
+
+  .create-content,
+  .trainer-workspace,
+  .multiplayer-workspace {
+    justify-content: flex-start;
+    padding: 4px 0;
+  }
+
+  .create-actions {
+    padding: 6px 0 0;
+  }
+
+  .create-content > *,
+  .trainer-workspace > *,
+  .multiplayer-workspace > * {
+    max-width: min(980px, 100%);
+  }
+
+  .adventure-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: 10px;
+  }
+
+  .map-page {
+    grid-template-rows: auto auto 1fr;
+  }
+
+  .map-board-wrap {
+    justify-content: flex-start;
+  }
+
+  .map-cell {
+    width: clamp(40px, 4.6vw, 56px);
+    height: clamp(40px, 4.6vw, 56px);
+  }
+
+  .battle-layout {
+    display: grid;
+    grid-template-columns: minmax(420px, 0.95fr) minmax(420px, 1.05fr);
+    gap: 14px;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .battle-field,
+  .battle-controls {
+    min-height: 0;
+  }
+
+  .battle-field {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .battle-controls {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .battle-log {
+    min-height: 88px;
+    max-height: 120px;
+  }
+
+  .battle-skill-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

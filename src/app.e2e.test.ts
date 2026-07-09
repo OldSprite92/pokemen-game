@@ -72,6 +72,8 @@ describe('🎮 宝可梦大冒险 - 完整功能测试', () => {
         playerTeam: [],
         activePlayerIndex: 0,
         isPVP: false,
+        playerStatuses: [],
+        enemyStatuses: [],
       },
       currentAdventure: null,
     });

@@ -6,6 +6,7 @@ import StepSkills from '../components/create/StepSkills';
 import StepAvatar from '../components/create/StepAvatar';
 import StepStats from '../components/create/StepStats';
 import { generateStats } from '../components/create/StepStats';
+import VoiceTextInput from '../components/VoiceTextInput';
 import { db } from '../db/database';
 import { useGameStore } from '../stores/gameStore';
 import type { ElementType, Monster } from '../types';
@@ -37,6 +38,9 @@ export default function CreatePage() {
   const [elements, setElements] = useState<ElementType[]>([]);
   const [skills, setSkills] = useState<SkillEntry[]>([{ name: '', description: '' }]);
   const [avatar, setAvatar] = useState('');
+  const [personality, setPersonality] = useState('');
+  const [favoriteThing, setFavoriteThing] = useState('');
+  const [catchphrase, setCatchphrase] = useState('');
 
   // 步骤验证
   const canProceed = () => {
@@ -89,6 +93,9 @@ export default function CreatePage() {
       speed: stats.speed,
       level: 1,
       exp: 0,
+      personality: personality.trim() || undefined,
+      favoriteThing: favoriteThing.trim() || undefined,
+      catchphrase: catchphrase.trim() || undefined,
       createdBy: 'user',
       createdAt: new Date(),
     };
@@ -131,7 +138,48 @@ export default function CreatePage() {
       case 3:
         return <StepAvatar avatar={avatar} onChange={setAvatar} />;
       case 4:
-        return <StepStats name={name} elements={elements} skills={skills} avatar={avatar} />;
+        return (
+          <div className="w-full max-w-sm flex flex-col gap-4">
+            <StepStats name={name} elements={elements} skills={skills} avatar={avatar} />
+            <div className="pixel-border rounded-xl p-4 bg-gray-800/70 flex flex-col gap-3">
+              <h3 className="text-lg font-bold text-yellow-300 text-center">让它更像你的伙伴</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {['勇敢', '调皮', '温柔', '聪明', '爱吃', '害羞'].map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => setPersonality(option)}
+                    className={`py-2 rounded-lg text-sm font-bold transition-all ${
+                      personality === option
+                        ? 'bg-yellow-500 text-gray-900'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+              <VoiceTextInput
+                type="text"
+                value={favoriteThing}
+                onChangeText={setFavoriteThing}
+                placeholder="它最喜欢什么？"
+                maxLength={10}
+                wrapperClassName="w-full"
+                className="bg-gray-700 border-2 border-gray-600 rounded-lg px-3 py-2 text-white text-center placeholder:text-gray-500"
+              />
+              <VoiceTextInput
+                type="text"
+                value={catchphrase}
+                onChangeText={setCatchphrase}
+                placeholder="它的口头禅/叫声"
+                maxLength={10}
+                wrapperClassName="w-full"
+                className="bg-gray-700 border-2 border-gray-600 rounded-lg px-3 py-2 text-white text-center placeholder:text-gray-500"
+              />
+              <p className="text-xs text-gray-500 text-center">这些不会影响强度，只会出现在冒险故事和图鉴里。</p>
+            </div>
+          </div>
+        );
       default:
         return null;
     }
@@ -153,7 +201,7 @@ export default function CreatePage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen p-4 gap-4">
+    <div className="create-page flex flex-col min-h-[100dvh] p-4 gap-4">
       {/* 顶部导航 */}
       <div className="flex items-center justify-between">
         <Link
@@ -194,12 +242,12 @@ export default function CreatePage() {
       </div>
 
       {/* 步骤内容 */}
-      <div className="flex-1 flex flex-col items-center justify-center">
+      <div className="create-content flex-1 flex flex-col items-center justify-center min-h-0 overflow-y-auto">
         {renderStep()}
       </div>
 
       {/* 底部按钮 */}
-      <div className="flex items-center justify-between gap-4 pt-2 pb-4">
+      <div className="create-actions flex items-center justify-between gap-4 pt-2 pb-4">
         <button
           onClick={handlePrev}
           disabled={currentStep === 0}

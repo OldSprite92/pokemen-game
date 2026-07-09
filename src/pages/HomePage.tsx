@@ -4,7 +4,10 @@ import { db } from '../db/database';
 import { useEffect, useState } from 'react';
 import { AVATAR_OPTIONS } from '../components/create/StepAvatar';
 import { ELEMENT_CONFIG } from '../components/create/StepElement';
-import type { Monster } from '../types';
+import TrainerAvatar from '../components/TrainerAvatar';
+import { getChapterConfig } from '../game/chapterSystem';
+import { DAILY_TASKS, getDailyTaskState, type DailyTaskState } from '../game/dailyTasks';
+import type { Continent, Monster } from '../types';
 
 const menuItems = [
   { to: '/create', label: '🎨 创造宝可梦', color: 'bg-red-500 hover:bg-red-600', emoji: '🎨' },
@@ -15,21 +18,13 @@ const menuItems = [
   { to: '/trainer', label: '🧑‍🎤 训练师', color: 'bg-purple-500 hover:bg-purple-600', emoji: '🧑‍🎤' },
 ];
 
-/** 训练师头像配置 */
-const TRAINER_AVATARS: Record<string, { emoji: string; color: string }> = {
-  boy1: { emoji: '👦', color: '#3b82f6' },
-  girl1: { emoji: '👧', color: '#ec4899' },
-  man1: { emoji: '👨', color: '#1e40af' },
-  woman1: { emoji: '👩', color: '#be185d' },
-  boy2: { emoji: '🧑‍🎤', color: '#8b5cf6' },
-  girl2: { emoji: '👸', color: '#f472b6' },
-  grandpa: { emoji: '👴', color: '#78716c' },
-  grandma: { emoji: '👵', color: '#a8a29e' },
-};
-
 export default function HomePage() {
   const currentTrainer = useGameStore((state) => state.currentTrainer);
+  const currentAdventure = useGameStore((state) => state.currentAdventure);
   const [trainerMonsters, setTrainerMonsters] = useState<Monster[]>([]);
+  const [adventureContinent, setAdventureContinent] = useState<Continent | null>(null);
+  const [parentNarration, setParentNarration] = useState(() => localStorage.getItem('parentNarration') !== 'off');
+  const [dailyTaskState, setDailyTaskState] = useState<DailyTaskState | null>(null);
 
   useEffect(() => {
     if (currentTrainer && currentTrainer.monsterIds.length > 0) {
@@ -39,12 +34,29 @@ export default function HomePage() {
     } else {
       setTrainerMonsters([]);
     }
+    setDailyTaskState(currentTrainer ? getDailyTaskState(currentTrainer.id) : null);
   }, [currentTrainer]);
 
+  useEffect(() => {
+    if (!currentAdventure) {
+      setAdventureContinent(null);
+      return;
+    }
+    db.continents.where('id').equals(currentAdventure.continentId).first().then((continent) => {
+      setAdventureContinent(continent || null);
+    });
+  }, [currentAdventure]);
+
+  const toggleParentNarration = () => {
+    const next = !parentNarration;
+    setParentNarration(next);
+    localStorage.setItem('parentNarration', next ? 'on' : 'off');
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-6 gap-6">
+    <div className="home-page flex flex-col items-center justify-center min-h-[100dvh] p-6 gap-6">
       {/* 标题区域 */}
-      <div className="text-center mb-4">
+      <div className="home-title text-center mb-4">
         <h1 className="text-4xl font-bold text-yellow-300 pixel-title drop-shadow-lg">
           ⚡ 宝可梦 ⚡
         </h1>
@@ -58,13 +70,13 @@ export default function HomePage() {
 
       {/* 训练师信息卡片 */}
       {currentTrainer ? (
-        <div className="pixel-border rounded-2xl p-4 bg-gray-800/70 w-full max-w-xs flex items-center gap-4">
-          <div
-            className="w-14 h-14 rounded-xl flex items-center justify-center text-3xl"
-            style={{ backgroundColor: TRAINER_AVATARS[currentTrainer.avatar]?.color + '30' }}
-          >
-            {TRAINER_AVATARS[currentTrainer.avatar]?.emoji || '❓'}
-          </div>
+        <div className="home-trainer pixel-border rounded-2xl p-4 bg-gray-800/70 w-full max-w-xs flex items-center gap-4">
+          <TrainerAvatar
+            avatar={currentTrainer.avatar}
+            className="w-14 h-14 rounded-xl"
+            imageClassName="w-full h-full object-cover rounded-xl"
+            emojiClassName="text-3xl"
+          />
           <div className="flex-1">
             <p className="text-xs text-gray-400">训练师</p>
             <p className="text-lg font-bold text-white">{currentTrainer.name}</p>
@@ -76,7 +88,7 @@ export default function HomePage() {
       ) : (
         <Link
           to="/trainer"
-          className="pixel-border rounded-2xl p-4 bg-gray-800/70 w-full max-w-xs text-center hover:bg-gray-700/70 transition-colors"
+          className="home-trainer pixel-border rounded-2xl p-4 bg-gray-800/70 w-full max-w-xs text-center hover:bg-gray-700/70 transition-colors"
         >
           <p className="text-gray-400">还没有训练师</p>
           <p className="text-yellow-300 font-bold">点击创建 →</p>
@@ -84,7 +96,7 @@ export default function HomePage() {
       )}
 
       {/* 装饰分割线 */}
-      <div className="flex gap-1 mb-2">
+      <div className="home-divider flex gap-1 mb-2">
         {Array.from({ length: 11 }).map((_, i) => (
           <div
             key={i}
@@ -94,8 +106,59 @@ export default function HomePage() {
         ))}
       </div>
 
+      {currentAdventure && adventureContinent && (
+        <Link
+          to={`/map/${currentAdventure.continentId}`}
+          className="home-current pixel-border rounded-2xl p-4 bg-yellow-500/20 w-full max-w-xs text-center hover:bg-yellow-500/30 transition-all active:scale-95"
+        >
+          <p className="text-2xl mb-1">{adventureContinent.emoji}</p>
+          <p className="text-xl font-bold text-yellow-200">继续冒险</p>
+          <p className="text-sm text-gray-300 mt-1">{getChapterConfig(adventureContinent).goalText}</p>
+        </Link>
+      )}
+
+      {currentTrainer && dailyTaskState && (
+        <Link
+          to={currentAdventure ? `/map/${currentAdventure.continentId}` : '/adventure'}
+          className="home-daily pixel-border rounded-2xl p-4 bg-gray-800/70 w-full max-w-xs hover:bg-gray-700/70 transition-all active:scale-95"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-xs text-gray-400">今天要干什么</p>
+              <p className="text-lg font-bold text-yellow-200">今日目标</p>
+            </div>
+            <span className="text-sm font-bold text-green-300">
+              {dailyTaskState.completedTaskIds.length}/{dailyTaskState.taskIds.length}
+            </span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {dailyTaskState.taskIds.map((taskId) => {
+              const task = DAILY_TASKS[taskId];
+              const done = dailyTaskState.completedTaskIds.includes(taskId);
+              if (!task) return null;
+              return (
+                <div key={taskId} className="flex items-center gap-2 text-sm">
+                  <span className="text-lg">{done ? '✅' : task.emoji}</span>
+                  <span className={done ? 'text-green-200' : 'text-gray-300'}>{task.label}</span>
+                </div>
+              );
+            })}
+          </div>
+          {dailyTaskState.bonusClaimed && (
+            <p className="text-xs text-pink-200 mt-3">🌈 今日彩虹贴纸已获得</p>
+          )}
+        </Link>
+      )}
+
+      <button
+        onClick={toggleParentNarration}
+        className="home-parent w-full max-w-xs rounded-xl bg-gray-800/70 border border-gray-700 px-4 py-2 text-sm font-bold text-gray-200 hover:bg-gray-700/70"
+      >
+        🎙️ 亲子旁白：{parentNarration ? '开启' : '关闭'}
+      </button>
+
       {/* 菜单按钮 */}
-      <div className="flex flex-col gap-4 w-full max-w-xs">
+      <div className="home-menu flex flex-col gap-4 w-full max-w-xs">
         {menuItems.map((item) => (
           <Link
             key={item.to}
@@ -119,7 +182,7 @@ export default function HomePage() {
 
       {/* 快捷宝可梦预览 */}
       {trainerMonsters.length > 0 && (
-        <div className="w-full max-w-xs">
+        <div className="home-monsters w-full max-w-xs">
           <p className="text-sm text-gray-400 mb-2 text-center">我的宝可梦：</p>
           <div className="flex justify-center gap-2 flex-wrap">
             {trainerMonsters.slice(0, 6).map((monster) => {
@@ -153,7 +216,7 @@ export default function HomePage() {
       )}
 
       {/* 底部提示 */}
-      <p className="text-sm text-gray-500 mt-6">
+      <p className="home-tip text-sm text-gray-500 mt-6">
         👆 点击按钮开始游戏吧！
       </p>
     </div>

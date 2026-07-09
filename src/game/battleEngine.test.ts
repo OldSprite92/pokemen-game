@@ -7,6 +7,7 @@ import {
   calculateExpGain,
   getExpToNextLevel,
   levelUp,
+  getSkillStatusConfig,
 } from '../game/battleEngine';
 import type { Monster, Skill } from '../types';
 
@@ -162,5 +163,30 @@ describe('经验值与升级', () => {
     expect(leveled.attack).toBeGreaterThan(monster.attack);
     expect(leveled.defense).toBeGreaterThan(monster.defense);
     expect(leveled.speed).toBeGreaterThan(monster.speed);
+  });
+});
+
+describe('技能负面状态配置', () => {
+  it('电击技能可能造成麻痹', () => {
+    const skill = createTestSkill({ id: 'electric-1', name: '电击', element: 'electric' });
+    const status = getSkillStatusConfig(skill);
+
+    expect(status?.type).toBe('paralysis');
+    expect(status?.turns).toBe(2);
+    expect(status?.skipChance).toBe(0.35);
+  });
+
+  it('剧毒技能可能造成持续中毒伤害', () => {
+    const skill = createTestSkill({ id: 'poison-3', name: '剧毒', element: 'poison' });
+    const status = getSkillStatusConfig(skill);
+
+    expect(status?.type).toBe('poison');
+    expect(status?.turns).toBe(3);
+    expect(status?.damagePerTurn).toBe(5);
+  });
+
+  it('普通撞击没有负面状态', () => {
+    const skill = createTestSkill({ id: 'normal-1', name: '撞击', element: 'normal' });
+    expect(getSkillStatusConfig(skill)).toBeNull();
   });
 });

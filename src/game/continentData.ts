@@ -15,18 +15,16 @@ export function generateMapGrid(size: number, element: ElementType): MapCell[] {
       } else {
         // 随机生成其他格子
         const rand = Math.random();
-        if (rand < 0.05) {
-          type = 'boss'; // 5% Boss
-        } else if (rand < 0.25) {
+        if (rand < 0.2) {
           type = 'wild'; // 20% 野生宝可梦
-        } else if (rand < 0.35) {
+        } else if (rand < 0.3) {
           type = 'treasure'; // 10% 宝藏
-        } else if (rand < 0.45) {
+        } else if (rand < 0.4) {
           type = 'rest'; // 10% 休息点
-        } else if (rand < 0.55) {
+        } else if (rand < 0.5) {
           type = 'blocked'; // 10% 障碍物
         } else {
-          type = 'empty'; // 45% 空地
+          type = 'empty'; // 50% 空地
         }
       }
 
@@ -40,14 +38,12 @@ export function generateMapGrid(size: number, element: ElementType): MapCell[] {
     }
   }
 
-  // 确保至少有一个Boss
-  const bossCells = cells.filter((c) => c.type === 'boss');
-  if (bossCells.length === 0) {
-    // 在边缘找一个空格子变成Boss
-    const edgeEmpty = cells.find((c) => c.type === 'empty' && (c.x === 0 || c.x === size - 1 || c.y === 0 || c.y === size - 1));
-    if (edgeEmpty) {
-      edgeEmpty.type = 'boss';
-    }
+  // 章节Boss固定在远离起点的右上角，成为清晰终点。
+  const bossCell = cells.find((c) => c.x === size - 1 && c.y === 0);
+  if (bossCell) {
+    bossCell.type = 'boss';
+    bossCell.revealed = false;
+    bossCell.visited = false;
   }
 
   // 确保起点周围有可达路径（移除起点周围的障碍物）

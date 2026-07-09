@@ -6,7 +6,8 @@ import { ELEMENT_CONFIG } from '../components/create/StepElement';
 import { AVATAR_OPTIONS } from '../components/create/StepAvatar';
 import { generateRandomSkill } from '../game/rewardSystem';
 import { ALL_WILD_MONSTERS } from '../game/wildMonsters';
-import type { Monster, ElementType, EncounterRecord } from '../types';
+import { generateMonsterBackstory } from '../game/monsterStory';
+import type { AdventureDiaryEntry, Badge, Monster, ElementType, EncounterRecord, Sticker } from '../types';
 
 /** 技能石配置 */
 const SKILL_STONE_CONFIG: Record<ElementType, { emoji: string; color: string; name: string }> = {
@@ -35,7 +36,10 @@ export default function PokedexPage() {
   const currentTrainer = useGameStore((state) => state.currentTrainer);
   const [monsters, setMonsters] = useState<Monster[]>([]);
   const [encounters, setEncounters] = useState<EncounterRecord[]>([]);
-  const [activeTab, setActiveTab] = useState<'owned' | 'encountered'>('owned');
+  const [badges, setBadges] = useState<Badge[]>([]);
+  const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [diaryEntries, setDiaryEntries] = useState<AdventureDiaryEntry[]>([]);
+  const [activeTab, setActiveTab] = useState<'owned' | 'encountered' | 'badges' | 'stickers' | 'diary'>('owned');
   const [loading, setLoading] = useState(true);
   const [selectedMonster, setSelectedMonster] = useState<Monster | null>(null);
   const [showSkillDetail, setShowSkillDetail] = useState(false);
@@ -54,6 +58,7 @@ export default function PokedexPage() {
   useEffect(() => {
     loadMonsters();
     loadEncounters();
+    loadCollections();
     loadSkillStones();
   }, [currentTrainer]); // 当训练师变化时重新加载技能石
 
@@ -100,6 +105,22 @@ export default function PokedexPage() {
     } else {
       setSkillStones([]);
     }
+  };
+
+  const loadCollections = async () => {
+    const trainerId = currentTrainer?.id;
+    const [allBadges, allStickers, allDiary] = await Promise.all([
+      db.badges.toArray(),
+      db.stickers.toArray(),
+      db.diaryEntries.toArray(),
+    ]);
+    setBadges(allBadges.filter((item) => !trainerId || item.trainerId === trainerId).reverse());
+    setStickers(allStickers.filter((item) => !trainerId || item.trainerId === trainerId).reverse());
+    setDiaryEntries(
+      allDiary
+        .filter((item) => !trainerId || item.trainerId === trainerId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    );
   };
 
   const saveSkillStones = (stones: { element: ElementType; id: string }[]) => {
@@ -250,6 +271,66 @@ export default function PokedexPage() {
     return speciesMap[m.element] || '未知宝可梦';
   };
 
+  const getDisplayHeight = (m: Monster) => {
+    if (m.height) return `${m.height} m`;
+    const baseByElement: Partial<Record<ElementType, number>> = {
+      bug: 0.4,
+      fairy: 0.6,
+      normal: 0.8,
+      electric: 0.9,
+      grass: 1.0,
+      water: 1.1,
+      fire: 1.2,
+      ice: 1.2,
+      fighting: 1.3,
+      poison: 1.0,
+      ground: 1.4,
+      flying: 1.1,
+      psychic: 1.2,
+      rock: 1.5,
+      ghost: 1.0,
+      dragon: 1.8,
+      dark: 1.2,
+      steel: 1.6,
+      light: 1.3,
+    };
+    const height = (baseByElement[m.element] ?? 1.0) + Math.min(m.level, 10) * 0.05;
+    return `${height.toFixed(1)} m`;
+  };
+
+  const getDisplayWeight = (m: Monster) => {
+    if (m.weight) return `${m.weight} kg`;
+    const baseByElement: Partial<Record<ElementType, number>> = {
+      bug: 8,
+      fairy: 12,
+      normal: 18,
+      electric: 22,
+      grass: 25,
+      water: 28,
+      fire: 30,
+      ice: 32,
+      fighting: 36,
+      poison: 24,
+      ground: 45,
+      flying: 20,
+      psychic: 26,
+      rock: 60,
+      ghost: 10,
+      dragon: 72,
+      dark: 30,
+      steel: 80,
+      light: 24,
+    };
+    const weight = (baseByElement[m.element] ?? 20) + Math.min(m.level, 10) * 2;
+    return `${weight.toFixed(1)} kg`;
+  };
+
+  const getBackstory = (m: Monster) => {
+    const encounter = encounters.find((e) => e.monsterName === m.name);
+    const place = encounter?.continentName || '冒险路上';
+    return generateMonsterBackstory(m, { discoveredPlace: place });
+  };
+
   const renderDetailModal = () => {
     if (!showDetailModal || !selectedMonster) return null;
     return (
@@ -313,6 +394,11 @@ export default function PokedexPage() {
             <div className="mt-4 p-3 rounded-xl bg-gray-800/50">
               <p className="text-sm text-gray-300 leading-relaxed">{getDescription(selectedMonster)}</p>
             </div>
+
+            <div className="mt-3 p-3 rounded-xl bg-indigo-900/30 border border-indigo-400/20">
+              <h3 className="text-sm font-bold text-indigo-200 mb-2">📜 经历故事</h3>
+              <p className="text-sm text-gray-300 leading-relaxed">{getBackstory(selectedMonster)}</p>
+            </div>
           </div>
 
           {/* 种族值 */}
@@ -348,17 +434,17 @@ export default function PokedexPage() {
             </div>
           </div>
 
-          {/* 基本信息网格 */}
+            {/* 基本信息网格 */}
           <div className="px-6 pb-4">
             <h3 className="text-sm font-bold text-gray-400 mb-3">基本信息</h3>
             <div className="grid grid-cols-2 gap-2">
               <div className="p-3 rounded-xl bg-gray-800/50">
                 <p className="text-xs text-gray-500 mb-1">身高</p>
-                <p className="text-sm font-bold text-white">{selectedMonster.height ? `${selectedMonster.height} m` : '?.? m'}</p>
+                <p className="text-sm font-bold text-white">{getDisplayHeight(selectedMonster)}</p>
               </div>
               <div className="p-3 rounded-xl bg-gray-800/50">
                 <p className="text-xs text-gray-500 mb-1">体重</p>
-                <p className="text-sm font-bold text-white">{selectedMonster.weight ? `${selectedMonster.weight} kg` : '??.? kg'}</p>
+                <p className="text-sm font-bold text-white">{getDisplayWeight(selectedMonster)}</p>
               </div>
               <div className="p-3 rounded-xl bg-gray-800/50">
                 <p className="text-xs text-gray-500 mb-1">HP</p>
@@ -370,6 +456,29 @@ export default function PokedexPage() {
               </div>
             </div>
           </div>
+
+          {!isEncounterDetail && (selectedMonster.personality || selectedMonster.favoriteThing || selectedMonster.catchphrase) && (
+            <div className="px-6 pb-4">
+              <h3 className="text-sm font-bold text-gray-400 mb-3">伙伴小秘密</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {selectedMonster.personality && (
+                  <div className="p-3 rounded-xl bg-yellow-500/10 text-sm text-yellow-100">
+                    性格：{selectedMonster.personality}
+                  </div>
+                )}
+                {selectedMonster.favoriteThing && (
+                  <div className="p-3 rounded-xl bg-pink-500/10 text-sm text-pink-100">
+                    最喜欢：{selectedMonster.favoriteThing}
+                  </div>
+                )}
+                {selectedMonster.catchphrase && (
+                  <div className="p-3 rounded-xl bg-blue-500/10 text-sm text-blue-100">
+                    口头禅：“{selectedMonster.catchphrase}！”
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 技能列表 - 仅我的宝可梦显示 */}
           {!isEncounterDetail && (
@@ -518,7 +627,7 @@ export default function PokedexPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen p-4 gap-4">
+    <div className="pokedex-page flex flex-col min-h-[100dvh] p-4 gap-4">
       {/* 顶部 */}
       <div className="flex items-center justify-between">
         <Link to="/" className="text-blue-400 hover:text-blue-300 text-lg font-bold">
@@ -529,27 +638,26 @@ export default function PokedexPage() {
       </div>
 
       {/* 标签切换 */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setActiveTab('owned')}
-          className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${
-            activeTab === 'owned'
-              ? 'bg-yellow-500 text-gray-900'
-              : 'bg-gray-800 text-gray-400'
-          }`}
-        >
-          🎒 我的宝可梦 ({monsters.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('encountered')}
-          className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${
-            activeTab === 'encountered'
-              ? 'bg-yellow-500 text-gray-900'
-              : 'bg-gray-800 text-gray-400'
-          }`}
-        >
-          👁️ 遭遇记录 ({encounters.length})
-        </button>
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { id: 'owned', label: `🎒 我的宝可梦 ${monsters.length}` },
+          { id: 'encountered', label: `👁️ 遭遇记录 ${encounters.length}` },
+          { id: 'badges', label: `🏅 徽章 ${badges.length}` },
+          { id: 'stickers', label: `🌟 贴纸 ${stickers.length}` },
+          { id: 'diary', label: `📔 日记 ${diaryEntries.length}` },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as typeof activeTab)}
+            className={`py-2 rounded-xl font-bold text-xs transition-all ${
+              activeTab === tab.id
+                ? 'bg-yellow-500 text-gray-900'
+                : 'bg-gray-800 text-gray-400'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* 提示消息 */}
@@ -706,6 +814,64 @@ export default function PokedexPage() {
             </div>
           )}
         </>
+      )}
+
+      {activeTab === 'badges' && (
+        <div className="flex flex-col gap-3">
+          {badges.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12">
+              <p className="text-xl text-gray-400">还没有徽章</p>
+              <Link to="/adventure" className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold">
+                🗺️ 去挑战大陆Boss
+              </Link>
+            </div>
+          ) : badges.map((badge) => (
+            <div key={badge.id} className="pixel-border rounded-xl p-4 bg-yellow-500/10 flex items-center gap-4">
+              <div className="text-4xl">{badge.emoji}</div>
+              <div>
+                <p className="text-lg font-bold text-yellow-200">{badge.name}</p>
+                <p className="text-sm text-gray-400">{new Date(badge.earnedAt).toLocaleDateString('zh-CN')} 获得</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'stickers' && (
+        <div className="grid grid-cols-3 gap-3">
+          {stickers.length === 0 ? (
+            <div className="col-span-3 flex flex-col items-center justify-center gap-4 py-12">
+              <p className="text-xl text-gray-400">还没有贴纸</p>
+              <Link to="/adventure" className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold">
+                💎 去完成小任务
+              </Link>
+            </div>
+          ) : stickers.map((sticker) => (
+            <div key={sticker.id} className="pixel-border rounded-xl p-3 bg-gray-800/50 text-center">
+              <div className="text-4xl">{sticker.emoji}</div>
+              <p className="text-sm font-bold text-white mt-2">{sticker.name}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'diary' && (
+        <div className="flex flex-col gap-3">
+          {diaryEntries.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12">
+              <p className="text-xl text-gray-400">还没有冒险日记</p>
+              <p className="text-sm text-gray-500">赢得战斗或捕获伙伴后会自动记录。</p>
+            </div>
+          ) : diaryEntries.map((entry) => (
+            <div key={entry.id} className="pixel-border rounded-xl p-4 bg-gray-800/50">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-bold text-yellow-200">{entry.title}</p>
+                <p className="text-xs text-gray-500">{new Date(entry.createdAt).toLocaleDateString('zh-CN')}</p>
+              </div>
+              <p className="text-sm text-gray-300 leading-relaxed">{entry.text}</p>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* 精美详情弹窗 - 使用函数调用来避免Tree Shaking */}

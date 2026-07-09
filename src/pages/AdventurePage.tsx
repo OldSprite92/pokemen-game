@@ -2,9 +2,18 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { db } from '../db/database';
 import { useGameStore } from '../stores/gameStore';
-import { getPresetContinents, createCustomContinent, PRESET_CONTINENTS } from '../game/continentData';
+import { getPresetContinents, createCustomContinent } from '../game/continentData';
 import { ELEMENT_CONFIG } from '../components/create/StepElement';
-import type { Continent, ElementType } from '../types';
+import VoiceTextInput from '../components/VoiceTextInput';
+import {
+  MAP_DIFFICULTIES,
+  createDifficultyCells,
+  getMapDifficultyConfig,
+  hasCompletedDifficulty,
+  isDifficultyUnlocked,
+  unlockDifficultyByParent,
+} from '../game/mapDifficulty';
+import type { Continent, ElementType, MapDifficulty, Monster } from '../types';
 
 export default function AdventurePage() {
   const navigate = useNavigate();
@@ -14,10 +23,17 @@ export default function AdventurePage() {
   const [customName, setCustomName] = useState('');
   const [customElement, setCustomElement] = useState<ElementType>('fire');
   const [customColor, setCustomColor] = useState('#ef4444');
+  const [trainerMonsters, setTrainerMonsters] = useState<Monster[]>([]);
+  const [unlockMessage, setUnlockMessage] = useState<string | null>(null);
+  const currentTrainer = useGameStore((state) => state.currentTrainer);
 
   useEffect(() => {
     loadContinents();
   }, []);
+
+  useEffect(() => {
+    loadTrainerMonsters();
+  }, [currentTrainer]);
 
   const loadContinents = async () => {
     try {
@@ -50,14 +66,53 @@ export default function AdventurePage() {
     }
   };
 
-  const handleSelectContinent = (continent: Continent) => {
+  const loadTrainerMonsters = async () => {
+    const monsters = await db.monsters.toArray();
+    const trainerIds = currentTrainer?.monsterIds ?? [];
+    setTrainerMonsters(trainerIds.length > 0
+      ? monsters.filter((monster) => monster.id && trainerIds.includes(monster.id))
+      : monsters);
+  };
+
+  const handleSelectContinent = async (continent: Continent, difficulty: MapDifficulty) => {
+    const unlocked = isDifficultyUnlocked(
+      continent.id,
+      difficulty,
+      trainerMonsters,
+      currentTrainer?.id,
+      continent.completed
+    );
+    if (!unlocked) {
+      const config = getMapDifficultyConfig(difficulty);
+      setUnlockMessage(`${config.label}难度还没开放：${config.unlockHint}`);
+      setTimeout(() => setUnlockMessage(null), 3500);
+      return;
+    }
+
+    const startPos = { x: Math.floor(continent.gridSize / 2), y: Math.floor(continent.gridSize / 2) };
+    const difficultyCells = createDifficultyCells(continent, difficulty);
+    await db.continents.update(continent.id, { cells: difficultyCells });
+    setContinents((prev) => prev.map((item) =>
+      item.id === continent.id ? { ...item, cells: difficultyCells } : item
+    ));
+
     // 保存当前冒险到store
     useGameStore.getState().setCurrentAdventure({
       continentId: continent.id,
-      currentPosition: { x: Math.floor(continent.gridSize / 2), y: Math.floor(continent.gridSize / 2) },
+      difficulty,
+      currentPosition: startPos,
       events: [],
     });
     navigate(`/map/${continent.id}`);
+  };
+
+  const handleParentUnlock = (continent: Continent, difficulty: MapDifficulty) => {
+    const config = getMapDifficultyConfig(difficulty);
+    const ok = window.confirm(`家长解锁：确定开放${continent.name}的${config.displayLabel}吗？`);
+    if (!ok) return;
+    unlockDifficultyByParent(continent.id, difficulty, currentTrainer?.id);
+    setUnlockMessage(`${continent.name}的${config.label}难度已开放。`);
+    setTimeout(() => setUnlockMessage(null), 3500);
   };
 
   const handleCreateCustom = async () => {
@@ -83,7 +138,7 @@ export default function AdventurePage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen p-4 gap-4">
+    <div className="adventure-page flex flex-col min-h-[100dvh] p-4 gap-4">
       {/* 顶部 */}
       <div className="flex items-center justify-between">
         <Link to="/" className="text-blue-400 hover:text-blue-300 text-lg font-bold">
@@ -93,12 +148,19 @@ export default function AdventurePage() {
         <div className="w-12" />
       </div>
 
+      {unlockMessage && (
+        <div className="pixel-border rounded-xl bg-yellow-500/15 border-yellow-400/40 p-3 text-center text-sm font-bold text-yellow-100">
+          {unlockMessage}
+        </div>
+      )}
+
       {/* 大陆列表 */}
-      <div className="flex flex-col gap-3">
-        {continents.map((continent) => (
-          <button
+      <div className="adventure-list flex flex-col gap-3 min-h-0 overflow-y-auto">
+        {continents.map((continent) => {
+          const completedEasy = hasCompletedDifficulty(continent.id, 'easy', currentTrainer?.id, continent.completed);
+          return (
+          <div
             key={continent.id}
-            onClick={() => handleSelectContinent(continent)}
             className="pixel-border rounded-xl p-4 text-left transition-all hover:scale-[1.02] active:scale-95"
             style={{ backgroundColor: continent.bgColor + '80' }}
           >
@@ -112,7 +174,7 @@ export default function AdventurePage() {
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-bold text-white">{continent.name}</h3>
-                  {continent.completed && <span className="text-green-400 text-sm">✅ 已通关</span>}
+                  {completedEasy && <span className="text-green-400 text-sm">✅ 简单已通关</span>}
                   {continent.isCustom && <span className="text-yellow-400 text-sm">⭐ 自定义</span>}
                 </div>
                 <p className="text-sm text-gray-300">{continent.description}</p>
@@ -129,10 +191,47 @@ export default function AdventurePage() {
                   <span className="text-xs text-gray-400">Boss: {continent.bossName}</span>
                 </div>
               </div>
-              <span className="text-2xl">→</span>
             </div>
-          </button>
-        ))}
+            <div className="grid grid-cols-3 gap-2 mt-4">
+              {MAP_DIFFICULTIES.map((difficulty) => {
+                const config = getMapDifficultyConfig(difficulty);
+                const unlocked = isDifficultyUnlocked(
+                  continent.id,
+                  difficulty,
+                  trainerMonsters,
+                  currentTrainer?.id,
+                  continent.completed
+                );
+                const completed = hasCompletedDifficulty(continent.id, difficulty, currentTrainer?.id, continent.completed);
+                return (
+                  <div key={difficulty} className="flex flex-col gap-1">
+                    <button
+                      onClick={() => handleSelectContinent(continent, difficulty)}
+                      className={`min-h-20 rounded-lg border px-2 py-2 text-center transition-all active:scale-95 ${
+                        unlocked
+                          ? 'bg-gray-900/70 border-yellow-400/40 text-white hover:bg-gray-800'
+                          : 'bg-gray-900/40 border-gray-700 text-gray-500'
+                      }`}
+                    >
+                      <div className="text-xl">{completed ? '🏅' : config.emoji}</div>
+                      <div className="text-sm font-bold">{config.label}</div>
+                      <div className="text-[11px] leading-tight">{unlocked ? config.treasureLabel : '未开放'}</div>
+                    </button>
+                    {!unlocked && difficulty !== 'easy' && (
+                      <button
+                        onClick={() => handleParentUnlock(continent, difficulty)}
+                        className="rounded-md bg-blue-500/20 px-1 py-1 text-[11px] font-bold text-blue-200 active:scale-95"
+                      >
+                        家长解锁
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+        })}
       </div>
 
       {/* 创建自定义大陆 */}
@@ -147,11 +246,12 @@ export default function AdventurePage() {
       ) : (
         <div className="pixel-border rounded-xl p-4 bg-gray-800/70 flex flex-col gap-3">
           <h3 className="text-lg font-bold text-yellow-300">创建自定义大陆</h3>
-          <input
+          <VoiceTextInput
             type="text"
             value={customName}
-            onChange={(e) => setCustomName(e.target.value)}
+            onChangeText={setCustomName}
             placeholder="大陆名字"
+            wrapperClassName="w-full"
             className="bg-gray-700 border-2 border-gray-600 rounded-lg px-4 py-2 text-white text-center"
             maxLength={12}
           />

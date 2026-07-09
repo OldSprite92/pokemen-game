@@ -1,4 +1,4 @@
-import type { ElementType, Monster, Skill } from '../types';
+import type { BattleStatus, BattleStatusType, ElementType, Monster, Skill } from '../types';
 
 // ============ 属性克制表 ============
 // 值 > 1 表示克制，值 < 1 表示被克制，值 = 1 表示普通，0 表示无效
@@ -93,6 +93,127 @@ export function getEffectivenessLabel(effectiveness: number): string {
   if (effectiveness < 1) return '效果不佳';
   if (effectiveness > 1) return '效果拔群';
   return '';
+}
+
+// ============ 技能负面状态 ============
+
+export interface BattleStatusConfig {
+  type: BattleStatusType;
+  name: string;
+  emoji: string;
+  description: string;
+  turns: number;
+  chance: number;
+  damagePerTurn?: number;
+  skipChance?: number;
+}
+
+const STATUS_CONFIGS: Record<BattleStatusType, Omit<BattleStatusConfig, 'chance'>> = {
+  burn: {
+    type: 'burn',
+    name: '灼伤',
+    emoji: '🔥',
+    description: '每回合受到少量火焰伤害',
+    turns: 2,
+    damagePerTurn: 4,
+  },
+  poison: {
+    type: 'poison',
+    name: '中毒',
+    emoji: '☠️',
+    description: '每回合受到毒素伤害',
+    turns: 3,
+    damagePerTurn: 5,
+  },
+  paralysis: {
+    type: 'paralysis',
+    name: '麻痹',
+    emoji: '⚡',
+    description: '可能因为发麻而不能行动',
+    turns: 2,
+    skipChance: 0.35,
+  },
+  freeze: {
+    type: 'freeze',
+    name: '冻住',
+    emoji: '❄️',
+    description: '下一次行动会被冰雪挡住',
+    turns: 1,
+    skipChance: 1,
+  },
+  bind: {
+    type: 'bind',
+    name: '缠绕',
+    emoji: '🌿',
+    description: '每回合受到藤蔓或丝线伤害',
+    turns: 2,
+    damagePerTurn: 3,
+  },
+  fear: {
+    type: 'fear',
+    name: '害怕',
+    emoji: '🌙',
+    description: '下一次行动会犹豫一下',
+    turns: 1,
+    skipChance: 1,
+  },
+};
+
+const SKILL_STATUS_RULES: Record<string, { type: BattleStatusType; chance: number }> = {
+  'fire-2': { type: 'burn', chance: 0.25 },
+  'fire-4': { type: 'burn', chance: 0.35 },
+  'fire-5': { type: 'burn', chance: 0.30 },
+  'fire-6': { type: 'burn', chance: 0.40 },
+  'fire-7': { type: 'burn', chance: 0.45 },
+  'electric-1': { type: 'paralysis', chance: 0.25 },
+  'electric-2': { type: 'paralysis', chance: 0.30 },
+  'electric-3': { type: 'paralysis', chance: 0.25 },
+  'electric-4': { type: 'paralysis', chance: 0.60 },
+  'electric-5': { type: 'paralysis', chance: 0.35 },
+  'electric-6': { type: 'paralysis', chance: 0.45 },
+  'electric-7': { type: 'paralysis', chance: 0.50 },
+  'poison-1': { type: 'poison', chance: 0.35 },
+  'poison-2': { type: 'poison', chance: 0.40 },
+  'poison-3': { type: 'poison', chance: 0.60 },
+  'poison-4': { type: 'poison', chance: 0.45 },
+  'poison-5': { type: 'poison', chance: 0.50 },
+  'poison-6': { type: 'poison', chance: 0.55 },
+  'poison-7': { type: 'poison', chance: 0.65 },
+  'grass-1': { type: 'bind', chance: 0.40 },
+  'grass-4': { type: 'poison', chance: 0.45 },
+  'bug-2': { type: 'bind', chance: 0.40 },
+  'bug-3': { type: 'poison', chance: 0.35 },
+  'ice-1': { type: 'freeze', chance: 0.20 },
+  'ice-3': { type: 'freeze', chance: 0.30 },
+  'ice-4': { type: 'freeze', chance: 0.25 },
+  'ice-5': { type: 'freeze', chance: 0.35 },
+  'ice-6': { type: 'freeze', chance: 0.40 },
+  'ice-7': { type: 'freeze', chance: 0.45 },
+  'psychic-3': { type: 'fear', chance: 0.55 },
+  'ghost-4': { type: 'fear', chance: 0.60 },
+  'dark-4': { type: 'fear', chance: 0.55 },
+};
+
+export function getBattleStatusConfig(type: BattleStatusType) {
+  return STATUS_CONFIGS[type];
+}
+
+export function getSkillStatusConfig(skill: Skill): BattleStatusConfig | null {
+  const rule = SKILL_STATUS_RULES[skill.id];
+  if (!rule) return null;
+  return { ...STATUS_CONFIGS[rule.type], chance: rule.chance };
+}
+
+export function rollSkillStatus(skill: Skill): BattleStatus | null {
+  const config = getSkillStatusConfig(skill);
+  if (!config || Math.random() >= config.chance) return null;
+  return {
+    type: config.type,
+    turnsRemaining: config.turns,
+    damagePerTurn: config.damagePerTurn,
+    skipChance: config.skipChance,
+    sourceSkillName: skill.name,
+  };
 }
 
 // ============ 伤害计算 ============

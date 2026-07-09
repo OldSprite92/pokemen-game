@@ -5,6 +5,8 @@ import { Capacitor } from '@capacitor/core';
 interface VoiceInputButtonProps {
   onResult: (text: string) => void;
   lang?: string;
+  label?: string;
+  className?: string;
 }
 
 /** 检测是否支持语音识别（Web 或 Capacitor 原生） */
@@ -22,7 +24,7 @@ function getSpeechRecognitionConstructor(): (new () => SpeechRecognitionInstance
   return ctor ?? null;
 }
 
-export default function VoiceInputButton({ onResult, lang = 'zh-CN' }: VoiceInputButtonProps) {
+export default function VoiceInputButton({ onResult, lang = 'zh-CN', label = '说', className = '' }: VoiceInputButtonProps) {
   const [isListening, setIsListening] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -152,7 +154,8 @@ export default function VoiceInputButton({ onResult, lang = 'zh-CN' }: VoiceInpu
       onClick={isListening ? stopListening : startListening}
       className={`
         flex items-center justify-center
-        w-10 h-10 rounded-full
+        min-w-14 h-12 px-3 gap-1 rounded-xl
+        text-sm font-bold
         transition-all duration-200 active:scale-95
         ${isListening
           ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/50'
@@ -160,22 +163,20 @@ export default function VoiceInputButton({ onResult, lang = 'zh-CN' }: VoiceInpu
             ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/40'
             : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/40 hover:text-blue-300'
         }
+        ${className}
       `}
       title={isListening ? '点击停止录音' : permissionDenied ? '麦克风权限被拒绝' : '点击语音输入'}
     >
       {isListening ? (
-        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <rect x="6" y="4" width="4" height="12" rx="1" />
-          <rect x="12" y="7" width="4" height="9" rx="1" />
-        </svg>
+        <>
+          <span className="text-lg">■</span>
+          <span>停</span>
+        </>
       ) : (
-        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path
-            fillRule="evenodd"
-            d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 10-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
-            clipRule="evenodd"
-          />
-        </svg>
+        <>
+          <span className="text-lg">🎙️</span>
+          <span>{label}</span>
+        </>
       )}
     </button>
   );

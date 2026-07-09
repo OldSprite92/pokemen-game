@@ -1,24 +1,44 @@
-import { useState } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { db } from '../db/database';
 import { useGameStore } from '../stores/gameStore';
 import { STARTER_CONFIG } from '../game/starterMonsters';
 import { ELEMENT_CONFIG } from '../components/create/StepElement';
+import TrainerAvatar from '../components/TrainerAvatar';
+import VoiceTextInput from '../components/VoiceTextInput';
+import { TRAINER_AVATARS, getTrainerAvatarOption, isCustomTrainerAvatar } from '../game/trainerAvatars';
 import type { Monster } from '../types';
 
-/** 训练师头像选项 */
-export const TRAINER_AVATARS: Record<string, { emoji: string; label: string; color: string }> = {
-  boy1: { emoji: '👦', label: '男孩', color: '#3b82f6' },
-  girl1: { emoji: '👧', label: '女孩', color: '#ec4899' },
-  man1: { emoji: '👨', label: '爸爸', color: '#1e40af' },
-  woman1: { emoji: '👩', label: '妈妈', color: '#be185d' },
-  boy2: { emoji: '🧑‍🎤', label: '少年', color: '#8b5cf6' },
-  girl2: { emoji: '👸', label: '公主', color: '#f472b6' },
-  grandpa: { emoji: '👴', label: '爷爷', color: '#78716c' },
-  grandma: { emoji: '👵', label: '奶奶', color: '#a8a29e' },
-};
-
 type Step = 'trainer' | 'starter';
+
+function resizeTrainerAvatar(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('读取图片失败'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('图片格式不支持'));
+      img.onload = () => {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('无法处理图片'));
+          return;
+        }
+        canvas.width = size;
+        canvas.height = size;
+        const sourceSize = Math.min(img.width, img.height);
+        const sx = (img.width - sourceSize) / 2;
+        const sy = (img.height - sourceSize) / 2;
+        ctx.drawImage(img, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function TrainerPage() {
   const navigate = useNavigate();
@@ -29,6 +49,30 @@ export default function TrainerPage() {
   const [selectedStarter, setSelectedStarter] = useState<Monster | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('请选择图片文件');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setAvatarError('图片太大啦，换一张小一点的');
+      return;
+    }
+    try {
+      const resized = await resizeTrainerAvatar(file);
+      setAvatar(resized);
+      setAvatarError('');
+    } catch (err) {
+      console.error('头像上传失败:', err);
+      setAvatarError('头像处理失败，请换一张图片');
+    }
+  };
 
   const handleSave = async () => {
     if (!name.trim() || !avatar || !selectedStarter) return;
@@ -78,7 +122,7 @@ export default function TrainerPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen p-4 gap-4">
+    <div className="trainer-page flex flex-col min-h-[100dvh] p-4 gap-4">
       {/* 顶部 */}
       <div className="flex items-center justify-between">
         <Link to="/" className="text-blue-400 hover:text-blue-300 text-lg font-bold">
@@ -105,7 +149,7 @@ export default function TrainerPage() {
 
       {step === 'trainer' ? (
         /* ===== 步骤1：创建训练师 ===== */
-        <div className="flex-1 flex flex-col items-center justify-center gap-6">
+        <div className="trainer-workspace flex-1 flex flex-col items-center justify-center gap-6 min-h-0 overflow-y-auto">
           <div className="text-6xl">🧑‍🎤</div>
           <h2 className="text-2xl font-bold text-yellow-300 pixel-title text-center">
             创建训练师！
@@ -115,12 +159,13 @@ export default function TrainerPage() {
           </p>
 
           {/* 名字输入 */}
-          <div className="w-full max-w-sm flex items-center gap-3">
-            <input
+          <div className="w-full max-w-sm">
+            <VoiceTextInput
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChangeText={setName}
               placeholder="输入你的名字"
+              wrapperClassName="w-full"
               className="flex-1 text-center text-2xl font-bold
                 bg-gray-800 border-3 border-yellow-400/50 rounded-xl
                 px-6 py-4 text-white
@@ -156,7 +201,36 @@ export default function TrainerPage() {
                   </button>
                 );
               })}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex flex-col items-center justify-center gap-1 h-20 rounded-xl transition-all duration-200 active:scale-95 ${
+                  isCustomTrainerAvatar(avatar) ? 'ring-2 ring-yellow-400 scale-105 shadow-lg' : 'hover:scale-105'
+                }`}
+                style={{
+                  backgroundColor: '#22c55e20',
+                  boxShadow: isCustomTrainerAvatar(avatar) ? '0 0 16px #22c55e60' : undefined,
+                }}
+              >
+                {isCustomTrainerAvatar(avatar) ? (
+                  <TrainerAvatar avatar={avatar} className="w-9 h-9 rounded-lg" imageClassName="w-full h-full object-cover rounded-lg" />
+                ) : (
+                  <span className="text-3xl">📷</span>
+                )}
+                <span className="text-xs font-bold text-green-300">
+                  上传
+                </span>
+              </button>
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarUpload}
+              className="hidden"
+            />
+            {avatarError && (
+              <p className="text-center text-sm text-red-300 mt-3">{avatarError}</p>
+            )}
           </div>
 
           {/* 预览 */}
@@ -164,13 +238,21 @@ export default function TrainerPage() {
             <div className="pixel-border rounded-xl px-6 py-4 bg-gray-800/50 text-center flex flex-col items-center gap-2">
               <p className="text-lg text-yellow-200/80">你好，训练师！</p>
               {(() => {
-                const opt = TRAINER_AVATARS[avatar];
-                return opt ? (
+                const opt = getTrainerAvatarOption(avatar);
+                return (
                   <div className="flex items-center gap-3">
-                    <span className="text-4xl">{opt.emoji}</span>
-                    <span className="text-xl font-bold text-white">{name}</span>
+                    <TrainerAvatar
+                      avatar={avatar}
+                      className="w-14 h-14 rounded-xl"
+                      imageClassName="w-full h-full object-cover rounded-xl"
+                      emojiClassName="text-4xl"
+                    />
+                    <div className="text-left">
+                      <span className="text-xl font-bold text-white">{name}</span>
+                      <p className="text-xs text-gray-400">{opt?.label || '自定义头像'}</p>
+                    </div>
                   </div>
-                ) : null;
+                );
               })()}
             </div>
           )}
@@ -190,7 +272,7 @@ export default function TrainerPage() {
         </div>
       ) : (
         /* ===== 步骤2：选择初始宝可梦 ===== */
-        <div className="flex-1 flex flex-col items-center gap-6">
+        <div className="trainer-workspace flex-1 flex flex-col items-center gap-6 min-h-0 overflow-y-auto">
           <div className="text-6xl">⚡</div>
           <h2 className="text-2xl font-bold text-yellow-300 pixel-title text-center">
             选择你的初始宝可梦！

@@ -1,6 +1,14 @@
 import { create } from 'zustand';
-import type { GameState, Monster, BattleState, Trainer, Adventure } from '../types';
-import { calculateDamage, determineFirstTurn, calculateExpGain, getExpToNextLevel, levelUp } from '../game/battleEngine';
+import type { BattleStatus, GameState, Monster, BattleState, Trainer, Adventure } from '../types';
+import {
+  calculateDamage,
+  determineFirstTurn,
+  calculateExpGain,
+  getExpToNextLevel,
+  levelUp,
+  getBattleStatusConfig,
+  rollSkillStatus,
+} from '../game/battleEngine';
 import type { DamageResult } from '../game/battleEngine';
 import { db } from '../db/database';
 
@@ -14,6 +22,7 @@ export interface BattleTurnResult {
   attacker: 'player' | 'enemy';
   damageResult: DamageResult;
   targetHp: number;
+  statusDamage?: number;
 }
 
 export interface ExtendedBattleState extends BattleState {
@@ -28,6 +37,8 @@ export interface ExtendedBattleState extends BattleState {
   playerTeam: Monster[]; // 玩家可替换的宝可梦队伍
   activePlayerIndex: number; // 当前出战宝可梦索引
   isPVP: boolean; // 是否PVP对战
+  playerStatuses: BattleStatus[];
+  enemyStatuses: BattleStatus[];
 }
 
 const initialBattleState: ExtendedBattleState = {
@@ -47,7 +58,66 @@ const initialBattleState: ExtendedBattleState = {
   playerTeam: [],
   activePlayerIndex: 0,
   isPVP: false,
+  playerStatuses: [],
+  enemyStatuses: [],
 };
+
+function noActionResult(message: string): DamageResult {
+  return {
+    damage: 0,
+    effectiveness: 1,
+    effectivenessLabel: '',
+    isCritical: false,
+    isMiss: false,
+    logMessage: message,
+  };
+}
+
+function mergeStatus(statuses: BattleStatus[], incoming: BattleStatus) {
+  const existing = statuses.find((status) => status.type === incoming.type);
+  if (!existing) return [...statuses, incoming];
+  return statuses.map((status) =>
+    status.type === incoming.type
+      ? { ...incoming, turnsRemaining: Math.max(status.turnsRemaining, incoming.turnsRemaining) }
+      : status
+  );
+}
+
+function resolveStatusesAtTurnStart(
+  statuses: BattleStatus[],
+  currentHp: number,
+  monsterName: string
+) {
+  let nextHp = currentHp;
+  let statusDamage = 0;
+  let shouldSkip = false;
+  const messages: string[] = [];
+  const nextStatuses: BattleStatus[] = [];
+
+  statuses.forEach((status) => {
+    const config = getBattleStatusConfig(status.type);
+    if (status.damagePerTurn) {
+      const damage = Math.min(status.damagePerTurn, nextHp);
+      nextHp = Math.max(0, nextHp - damage);
+      statusDamage += damage;
+      messages.push(`${config.emoji} ${monsterName}受到${config.name}影响，损失 ${damage} 点HP。`);
+    }
+
+    if (status.skipChance && Math.random() < status.skipChance) {
+      shouldSkip = true;
+      messages.push(`${config.emoji} ${monsterName}因为${config.name}，这回合没能行动。`);
+    }
+
+    const turnsRemaining = status.turnsRemaining - 1;
+    if (turnsRemaining > 0) {
+      nextStatuses.push({ ...status, turnsRemaining });
+    } else {
+      messages.push(`${monsterName}的${config.name}状态消失了。`);
+    }
+  });
+
+  return { nextHp, nextStatuses, messages, shouldSkip, statusDamage };
+}
 
 interface ExtendedGameState extends GameState {
   extendedBattleState: ExtendedBattleState;
@@ -189,10 +259,42 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
 
     if (!skill) return null;
 
+    const statusStart = resolveStatusesAtTurnStart(state.playerStatuses, state.playerCurrentHp, player.name);
+    if (statusStart.nextHp <= 0 || statusStart.shouldSkip) {
+      const newLog = [...state.log, ...statusStart.messages];
+      if (statusStart.nextHp <= 0) {
+        newLog.push(`${player.name} 倒下了！`);
+      }
+      set((s) => ({
+        extendedBattleState: {
+          ...s.extendedBattleState,
+          playerCurrentHp: statusStart.nextHp,
+          playerStatuses: statusStart.nextStatuses,
+          log: newLog,
+          turn: statusStart.nextHp <= 0 ? s.extendedBattleState.turn : 'enemy',
+        },
+      }));
+      return {
+        attacker: 'player',
+        damageResult: noActionResult(statusStart.messages[statusStart.messages.length - 1] || `${player.name}没能行动。`),
+        targetHp: state.enemyCurrentHp,
+        statusDamage: statusStart.statusDamage,
+      };
+    }
+
     const damageResult = calculateDamage(player, enemy, skill);
     const newEnemyHp = Math.max(0, state.enemyCurrentHp - damageResult.damage);
 
-    const newLog = [...state.log, damageResult.logMessage];
+    let nextEnemyStatuses = state.enemyStatuses;
+    const newLog = [...state.log, ...statusStart.messages, damageResult.logMessage];
+    if (!damageResult.isMiss && damageResult.effectiveness > 0 && damageResult.damage > 0) {
+      const newStatus = rollSkillStatus(skill);
+      if (newStatus) {
+        nextEnemyStatuses = mergeStatus(nextEnemyStatuses, newStatus);
+        const config = getBattleStatusConfig(newStatus.type);
+        newLog.push(`${config.emoji} ${enemy.name}进入${config.name}状态，持续 ${newStatus.turnsRemaining} 回合！`);
+      }
+    }
     if (newEnemyHp <= 0) {
       newLog.push(`${enemy.name} 倒下了！`);
     }
@@ -200,7 +302,10 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
     set((s) => ({
       extendedBattleState: {
         ...s.extendedBattleState,
+        playerCurrentHp: statusStart.nextHp,
+        playerStatuses: statusStart.nextStatuses,
         enemyCurrentHp: newEnemyHp,
+        enemyStatuses: nextEnemyStatuses,
         log: newLog,
         lastDamageResult: damageResult,
         turn: newEnemyHp <= 0 ? s.extendedBattleState.turn : 'enemy',
@@ -211,6 +316,7 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
       attacker: 'player',
       damageResult,
       targetHp: newEnemyHp,
+      statusDamage: statusStart.statusDamage,
     };
   },
 
@@ -236,6 +342,7 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
         ...s.extendedBattleState,
         playerMonster: newMonster,
         playerCurrentHp: newMonster.hp,
+        playerStatuses: [],
         activePlayerIndex: monsterIndex,
         log: newLog,
         turn: 'enemy', // 替换消耗一回合
@@ -252,6 +359,30 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
     const player = state.playerMonster!;
     const enemy = state.enemyMonster!;
 
+    const statusStart = resolveStatusesAtTurnStart(state.enemyStatuses, state.enemyCurrentHp, enemy.name);
+    if (statusStart.nextHp <= 0 || statusStart.shouldSkip) {
+      const newLog = [...state.log, ...statusStart.messages];
+      if (statusStart.nextHp <= 0) {
+        newLog.push(`${enemy.name} 倒下了！`);
+      }
+      set((s) => ({
+        extendedBattleState: {
+          ...s.extendedBattleState,
+          enemyCurrentHp: statusStart.nextHp,
+          enemyStatuses: statusStart.nextStatuses,
+          log: newLog,
+          turn: statusStart.nextHp <= 0 ? s.extendedBattleState.turn : 'player',
+          turnCount: s.extendedBattleState.turnCount + 1,
+        },
+      }));
+      return {
+        attacker: 'enemy',
+        damageResult: noActionResult(statusStart.messages[statusStart.messages.length - 1] || `${enemy.name}没能行动。`),
+        targetHp: state.playerCurrentHp,
+        statusDamage: statusStart.statusDamage,
+      };
+    }
+
     // AI：随机选择一个技能
     const skillIndex = Math.floor(Math.random() * enemy.skills.length);
     const skill = enemy.skills[skillIndex];
@@ -259,7 +390,16 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
     const damageResult = calculateDamage(enemy, player, skill);
     const newPlayerHp = Math.max(0, state.playerCurrentHp - damageResult.damage);
 
-    const newLog = [...state.log, damageResult.logMessage];
+    let nextPlayerStatuses = state.playerStatuses;
+    const newLog = [...state.log, ...statusStart.messages, damageResult.logMessage];
+    if (!damageResult.isMiss && damageResult.effectiveness > 0 && damageResult.damage > 0) {
+      const newStatus = rollSkillStatus(skill);
+      if (newStatus) {
+        nextPlayerStatuses = mergeStatus(nextPlayerStatuses, newStatus);
+        const config = getBattleStatusConfig(newStatus.type);
+        newLog.push(`${config.emoji} ${player.name}进入${config.name}状态，持续 ${newStatus.turnsRemaining} 回合！`);
+      }
+    }
     if (newPlayerHp <= 0) {
       newLog.push(`${player.name} 倒下了！`);
     }
@@ -267,7 +407,10 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
     set((s) => ({
       extendedBattleState: {
         ...s.extendedBattleState,
+        enemyCurrentHp: statusStart.nextHp,
+        enemyStatuses: statusStart.nextStatuses,
         playerCurrentHp: newPlayerHp,
+        playerStatuses: nextPlayerStatuses,
         log: newLog,
         lastDamageResult: damageResult,
         turn: newPlayerHp <= 0 ? s.extendedBattleState.turn : 'player',
@@ -279,6 +422,7 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
       attacker: 'enemy',
       damageResult,
       targetHp: newPlayerHp,
+      statusDamage: statusStart.statusDamage,
     };
   },
 
@@ -334,6 +478,7 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
             ...s.extendedBattleState,
             playerMonster: nextMonster,
             playerCurrentHp: nextMonster.hp,
+            playerStatuses: [],
             activePlayerIndex: nextIndex >= 0 ? nextIndex : 0,
             log: newLog,
             turn: 'player',

@@ -6,7 +6,29 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { db } from '../db/database';
 import { POKEBALL_CONFIG, tryCatch, getCatchResultText, getCatchRateHint, calculateCatchRate } from '../game/catchSystem';
 import { generateBattleReward, applyExp, generateRewardText } from '../game/rewardSystem';
-import type { PokeBallType, Monster } from '../types';
+import { getSkillHint, createSignatureMoveName } from '../game/battleHints';
+import { getBattleStatusConfig } from '../game/battleEngine';
+import {
+  CHAPTER_TASKS,
+  completeTask,
+  createBadge,
+  createTaskSticker,
+  ensureAdventureChapter,
+  getTaskRewardBall,
+} from '../game/chapterSystem';
+import {
+  completeDailyTask,
+  createDailySticker,
+  getDailyTaskRewardBall,
+  type DailyTaskAction,
+} from '../game/dailyTasks';
+import {
+  getDifficultyRewardText,
+  getMapDifficultyConfig,
+  markDifficultyComplete,
+  normalizeDifficulty,
+} from '../game/mapDifficulty';
+import type { Continent, PokeBallType, Monster } from '../types';
 
 export default function BattlePage() {
   const navigate = useNavigate();
@@ -17,6 +39,9 @@ export default function BattlePage() {
   const [showReward, setShowReward] = useState(false);
   const [showSwitch, setShowSwitch] = useState(false);
   const [rewardTexts, setRewardTexts] = useState<string[]>([]);
+  const [partnerEnergy, setPartnerEnergy] = useState(0);
+  const [catchCard, setCatchCard] = useState<Monster | null>(null);
+  const [catchBonusTexts, setCatchBonusTexts] = useState<string[]>([]);
   const [inventory, setInventory] = useState<Record<PokeBallType, number>>({
     normal: 3, great: 1, ultra: 0, master: 0, legend: 0, transcend: 0,
   });
@@ -36,7 +61,20 @@ export default function BattlePage() {
     return trainerId ? `${key}_trainer_${trainerId}` : key;
   };
 
-  const { playerMonster, enemyMonster, playerCurrentHp, enemyCurrentHp, turn, isOver, winner, log, playerTeam, activePlayerIndex } = extendedBattleState;
+  const {
+    playerMonster,
+    enemyMonster,
+    playerCurrentHp,
+    enemyCurrentHp,
+    turn,
+    isOver,
+    winner,
+    log,
+    playerTeam,
+    activePlayerIndex,
+    playerStatuses,
+    enemyStatuses,
+  } = extendedBattleState;
 
   // 加载背包
   useEffect(() => {
@@ -54,6 +92,93 @@ export default function BattlePage() {
   const saveInventory = (inv: Record<PokeBallType, number>) => {
     localStorage.setItem(getStorageKey('pokeballs'), JSON.stringify(inv));
     setInventory(inv);
+  };
+
+  const addPokeballReward = (type: PokeBallType, count: number) => {
+    const saved = localStorage.getItem(getStorageKey('pokeballs'));
+    const baseInventory = saved ? JSON.parse(saved) : inventory;
+    const newInventory = { ...baseInventory, [type]: (baseInventory[type] || 0) + count };
+    saveInventory(newInventory);
+  };
+
+  const addDiaryEntry = async (text: string, continentId?: string) => {
+    const trainerId = currentTrainer?.id;
+    await db.diaryEntries.add({
+      trainerId,
+      continentId: continentId || 'free-battle',
+      title: '今日冒险',
+      text,
+      createdAt: new Date(),
+    });
+  };
+
+  const completeDailyReward = async (action: DailyTaskAction): Promise<string[]> => {
+    const { completedNow, task, bonusCompletedNow } = completeDailyTask(action, currentTrainer?.id);
+    if (!completedNow || !task) return [];
+
+    const ball = getDailyTaskRewardBall(task.id);
+    addPokeballReward(ball.type, ball.count);
+    const texts = [`${task.emoji} 完成今日目标：${task.label}`, task.rewardText];
+
+    if (bonusCompletedNow) {
+      const sticker = createDailySticker(currentTrainer?.id);
+      const existingSticker = await db.stickers
+        .where('stickerId')
+        .equals(sticker.stickerId)
+        .and((item) => item.trainerId === currentTrainer?.id)
+        .first();
+      if (!existingSticker) {
+        await db.stickers.add(sticker);
+      }
+      texts.push('🌈 今日目标全部完成，获得彩虹贴纸！');
+    }
+
+    return texts;
+  };
+
+  const completeAdventureTask = async (taskId: string): Promise<string[]> => {
+    const adventure = useGameStore.getState().currentAdventure;
+    if (!adventure) return [];
+
+    const continent = await db.continents.where('id').equals(adventure.continentId).first() as Continent | undefined;
+    if (!continent) return [];
+
+    const baseAdventure = ensureAdventureChapter(adventure, continent);
+    const { adventure: updatedAdventure, completedNow } = completeTask(baseAdventure, taskId);
+    const texts: string[] = [];
+
+    if (completedNow) {
+      const ball = getTaskRewardBall(taskId);
+      addPokeballReward(ball.type, ball.count);
+      await db.stickers.add(createTaskSticker(continent, taskId, currentTrainer?.id));
+      texts.push(`${CHAPTER_TASKS[taskId].emoji} 完成小任务：${CHAPTER_TASKS[taskId].label}`);
+      texts.push(`获得新贴纸和 ${ball.count} 个精灵球！`);
+    }
+
+    if (taskId === 'boss') {
+      const difficulty = normalizeDifficulty(updatedAdventure.difficulty);
+      const existingBadge = await db.badges
+        .where('continentId')
+        .equals(continent.id)
+        .and((badge) => badge.trainerId === currentTrainer?.id && badge.difficulty === difficulty)
+        .first();
+      markDifficultyComplete(continent.id, difficulty, currentTrainer?.id);
+      if (!existingBadge) {
+        const badge = createBadge(continent, currentTrainer?.id, difficulty);
+        await db.badges.add(badge);
+        if (difficulty === 'easy') {
+          await db.continents.update(continent.id, { completed: true });
+        }
+        texts.unshift(`${badge.emoji} 获得${badge.name}！`);
+        texts.push(getDifficultyRewardText(difficulty));
+      }
+    }
+
+    useGameStore.getState().setCurrentAdventure({
+      ...updatedAdventure,
+      pendingBattleType: undefined,
+    });
+    return texts;
   };
 
   // 🐛 BUG-006 修复：更新遭遇记录状态
@@ -96,7 +221,11 @@ export default function BattlePage() {
         isAnimatingRef.current = false;
         setIsAnimating(false);
       }, 1500);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        isAnimatingRef.current = false;
+        setIsAnimating(false);
+      };
     }
   }, [turn, isOver, executeEnemyTurn, checkBattleEnd, showCatch, showReward]);
 
@@ -112,15 +241,40 @@ export default function BattlePage() {
   const playerElement = ELEMENT_CONFIG[playerMonster.element];
   const enemyElement = ELEMENT_CONFIG[enemyMonster.element];
 
-  const handleSkillClick = useCallback(async (skillIndex: number) => {
+  const handleSkillClick = useCallback(async (skillIndex: number, isSignature = false) => {
     if (isAnimating || isOver || turn !== 'player') return;
 
     setIsAnimating(true);
 
+    const hint = getSkillHint(playerMonster.skills[skillIndex], playerMonster, enemyMonster);
     const result = executePlayerTurn(skillIndex);
     if (result && result.damageResult.damage > 0) {
       setShowDamage({ value: result.damageResult.damage, side: 'enemy' });
       setTimeout(() => setShowDamage(null), 800);
+    } else if (result?.statusDamage) {
+      setShowDamage({ value: result.statusDamage, side: 'player' });
+      setTimeout(() => setShowDamage(null), 800);
+    }
+
+    if (result && isSignature) {
+      const bonusDamage = 15;
+      useGameStore.setState((s: any) => {
+        const nextHp = Math.max(0, s.extendedBattleState.enemyCurrentHp - bonusDamage);
+        return {
+          extendedBattleState: {
+            ...s.extendedBattleState,
+            enemyCurrentHp: nextHp,
+            turn: nextHp <= 0 ? s.extendedBattleState.turn : s.extendedBattleState.turn,
+            log: [
+              ...s.extendedBattleState.log,
+              `${createSignatureMoveName(playerMonster)}爆发伙伴能量，追加 ${bonusDamage} 点伤害！`,
+            ],
+          },
+        };
+      });
+      setPartnerEnergy(0);
+    } else if (result && (hint.level === 'recommended' || result.damageResult.effectiveness > 1)) {
+      setPartnerEnergy((value) => Math.min(2, value + 1));
     }
 
     const ended = checkBattleEnd();
@@ -134,14 +288,20 @@ export default function BattlePage() {
       if (enemyResult && enemyResult.damageResult.damage > 0) {
         setShowDamage({ value: enemyResult.damageResult.damage, side: 'player' });
         setTimeout(() => setShowDamage(null), 800);
+      } else if (enemyResult?.statusDamage) {
+        setShowDamage({ value: enemyResult.statusDamage, side: 'enemy' });
+        setTimeout(() => setShowDamage(null), 800);
       }
-      checkBattleEnd();
+      const enemyEnded = checkBattleEnd();
+      if (enemyEnded) {
+        handleBattleEnd();
+      }
       setIsAnimating(false);
       isAnimatingRef.current = false;
     }, 1500);
-  }, [isAnimating, isOver, turn, executePlayerTurn, executeEnemyTurn, checkBattleEnd]);
+  }, [isAnimating, isOver, turn, executePlayerTurn, executeEnemyTurn, checkBattleEnd, playerMonster, enemyMonster]);
 
-  const handleBattleEnd = () => {
+  const handleBattleEnd = async () => {
     const state = useGameStore.getState().extendedBattleState;
     if (state.winner === 'player' && enemyMonster) {
       // 🐛 BUG-006 修复：更新遭遇记录的击败状态
@@ -149,7 +309,13 @@ export default function BattlePage() {
 
       // 生成奖励
       const reward = generateBattleReward(enemyMonster);
+      const adventure = useGameStore.getState().currentAdventure;
+      const difficultyConfig = getMapDifficultyConfig(adventure?.difficulty);
+      reward.exp = Math.floor(reward.exp * difficultyConfig.expMultiplier);
       const texts = generateRewardText(reward);
+      if (difficultyConfig.id !== 'easy') {
+        texts.push(`${difficultyConfig.emoji} ${difficultyConfig.label}难度奖励加成！`);
+      }
 
       // 应用经验值
       if (playerMonster) {
@@ -191,7 +357,19 @@ export default function BattlePage() {
         texts.push(`获得技能石！💎`);
       }
 
-      setRewardTexts(texts);
+      const taskId = adventure?.pendingBattleType === 'boss' ? 'boss' : 'battleWin';
+      const taskTexts = await completeAdventureTask(taskId);
+      texts.unshift(...taskTexts);
+      texts.unshift(...await completeDailyReward('battleWin'));
+
+      if (playerMonster) {
+        const signature = playerMonster.skills[0]?.name ?? '勇敢一击';
+        const diaryText = `${playerMonster.name}用${signature}帮助大家战胜了${enemyMonster.name}，离新的徽章又近了一步。`;
+        await addDiaryEntry(diaryText, adventure?.continentId);
+        texts.push('📔 新增一篇冒险日记！');
+      }
+
+      setRewardTexts(texts.slice(0, 4));
       setShowReward(true);
     }
     setIsAnimating(false);
@@ -233,8 +411,15 @@ export default function BattlePage() {
             db.trainers.update(trainer.id, {
               monsterIds: [...trainer.monsterIds, id as number],
             });
+            useGameStore.getState().setCurrentTrainer({
+              ...trainer,
+              monsterIds: [...trainer.monsterIds, id as number],
+            });
           }
         });
+        setCatchCard(caughtMonster);
+        addDiaryEntry(`${enemyMonster.name}加入了队伍！大家一起欢迎这位新伙伴。`, useGameStore.getState().currentAdventure?.continentId);
+        completeDailyReward('catch').then((texts) => setCatchBonusTexts(texts));
 
         // 🐛 BUG-006 修复：更新遭遇记录的捕获状态
         updateEncounterStatus(enemyMonster.name, true, false);
@@ -253,10 +438,13 @@ export default function BattlePage() {
         setTimeout(() => {
           setCatchResult(null);
           const enemyResult = executeEnemyTurn();
-          if (enemyResult && enemyResult.damageResult.damage > 0) {
-            setShowDamage({ value: enemyResult.damageResult.damage, side: 'player' });
-            setTimeout(() => setShowDamage(null), 800);
-          }
+        if (enemyResult && enemyResult.damageResult.damage > 0) {
+          setShowDamage({ value: enemyResult.damageResult.damage, side: 'player' });
+          setTimeout(() => setShowDamage(null), 800);
+        } else if (enemyResult?.statusDamage) {
+          setShowDamage({ value: enemyResult.statusDamage, side: 'enemy' });
+          setTimeout(() => setShowDamage(null), 800);
+        }
           checkBattleEnd();
           setIsAnimating(false);
           isAnimatingRef.current = false;
@@ -288,8 +476,28 @@ export default function BattlePage() {
     return getCatchRateHint(rate);
   };
 
+  const renderStatuses = (statuses: typeof playerStatuses) => {
+    if (statuses.length === 0) return null;
+    return (
+      <div className="flex flex-wrap gap-1 mt-2">
+        {statuses.map((status) => {
+          const config = getBattleStatusConfig(status.type);
+          return (
+            <span
+              key={status.type}
+              className="rounded-lg border border-yellow-400/30 bg-yellow-500/10 px-2 py-0.5 text-xs font-bold text-yellow-100"
+              title={config.description}
+            >
+              {config.emoji} {config.name} {status.turnsRemaining}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
-    <div className="flex flex-col min-h-screen p-4 gap-4">
+    <div className="battle-page flex flex-col min-h-[100dvh] p-4 gap-4">
       {/* 顶部 */}
       <div className="flex items-center justify-between">
         <button onClick={handleEndBattle} className="text-blue-400 hover:text-blue-300 text-lg font-bold">
@@ -300,7 +508,8 @@ export default function BattlePage() {
       </div>
 
       {/* 战斗区域 */}
-      <div className="flex-1 flex flex-col gap-6">
+      <div className="battle-layout flex-1 flex flex-col gap-6 min-h-0">
+        <div className="battle-field">
         {/* 敌方宝可梦 */}
         <div className="flex items-start gap-4">
           <div className="w-16 h-16 rounded-xl flex items-center justify-center text-3xl relative" style={{ backgroundColor: enemyAvatar?.bg || '#1f2937' }}>
@@ -322,11 +531,12 @@ export default function BattlePage() {
               <div className="h-full rounded-full transition-all duration-500" style={{ width: `${enemyHpPercent}%`, backgroundColor: hpBarColor(enemyHpPercent) }} />
             </div>
             <p className="text-xs text-gray-400 mt-1">{enemyCurrentHp} / {enemyMaxHp} HP</p>
+            {renderStatuses(enemyStatuses)}
           </div>
         </div>
 
         {/* 战斗播报 */}
-        <div className="pixel-border rounded-xl p-4 bg-gray-800/70 min-h-[120px] max-h-[160px] overflow-y-auto">
+        <div className="battle-log pixel-border rounded-xl p-4 bg-gray-800/70 min-h-[120px] max-h-[160px] overflow-y-auto">
           {log.slice(-5).map((entry, i) => (
             <p key={i} className={`text-sm mb-1 ${i === log.slice(-5).length - 1 ? 'text-yellow-200 font-bold' : 'text-gray-300'}`}>
               {entry}
@@ -360,10 +570,13 @@ export default function BattlePage() {
               <div className="h-full rounded-full transition-all duration-500" style={{ width: `${playerHpPercent}%`, backgroundColor: hpBarColor(playerHpPercent) }} />
             </div>
             <p className="text-xs text-gray-400 mt-1">{playerCurrentHp} / {playerMaxHp} HP</p>
+            {renderStatuses(playerStatuses)}
           </div>
+        </div>
         </div>
 
         {/* 战斗结束界面 */}
+        <div className="battle-controls">
         {isOver ? (
           <div className="flex flex-col items-center gap-4">
             <div className="text-6xl">{winner === 'player' ? '🎉' : '😢'}</div>
@@ -381,7 +594,7 @@ export default function BattlePage() {
             </p>
 
             {/* 技能按钮 */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="battle-skill-grid grid grid-cols-2 gap-3">
               {playerMonster.skills.map((skill, index) => {
                 const skillElement = ELEMENT_CONFIG[skill.element];
                 const isDisabled = isAnimating || turn !== 'player';
@@ -394,11 +607,40 @@ export default function BattlePage() {
                       isDisabled ? 'bg-gray-800 text-gray-600 cursor-not-allowed opacity-50' : 'bg-gray-700 text-white hover:bg-gray-600 shadow-lg'
                     }`}
                   >
+                    {(() => {
+                      const hint = getSkillHint(skill, playerMonster, enemyMonster);
+                      return (
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${hint.colorClass}`}>
+                          {hint.label} · {hint.reason}
+                        </span>
+                      );
+                    })()}
                     <span className="text-lg font-bold">{skillElement?.emoji} {skill.name}</span>
                     <span className="text-xs text-gray-400">威力 {skill.power} | 命中 {skill.accuracy}%</span>
                   </button>
                 );
               })}
+            </div>
+
+            <div className="rounded-xl bg-yellow-500/10 border border-yellow-400/30 p-3 text-center">
+              <p className="text-sm text-yellow-200 font-bold">
+                伙伴能量 {partnerEnergy}/2
+              </p>
+              {partnerEnergy >= 2 ? (
+                <button
+                  onClick={() => {
+                    const bestIndex = playerMonster.skills.reduce((best, skill, index, all) =>
+                      skill.power > all[best].power ? index : best, 0);
+                    handleSkillClick(bestIndex, true);
+                  }}
+                  disabled={isAnimating || turn !== 'player'}
+                  className="mt-2 w-full bg-yellow-500 text-gray-900 py-2 rounded-xl font-bold hover:bg-yellow-400 active:scale-95 transition-all"
+                >
+                  ✨ {createSignatureMoveName(playerMonster)}
+                </button>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1">使用推荐技能或打出克制，就能点亮大招。</p>
+              )}
             </div>
 
             {/* 捕获按钮 */}
@@ -422,6 +664,7 @@ export default function BattlePage() {
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* 捕获选择弹窗 */}
@@ -539,10 +782,41 @@ export default function BattlePage() {
               ))}
             </div>
             <button
-              onClick={() => { setShowReward(false); }}
+              onClick={() => { setShowReward(false); handleEndBattle(); }}
               className="bg-green-500 text-white px-8 py-3 rounded-xl font-bold text-lg hover:bg-green-400 active:scale-95 transition-all"
             >
-              ✅ 收下奖励
+              ✅ 收下奖励，继续冒险
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 捕获欢迎卡片 */}
+      {catchCard && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+          <div className="pixel-border rounded-2xl p-6 bg-gray-800 max-w-sm w-full text-center">
+            <div className="text-5xl mb-3">🎊</div>
+            <h3 className="text-xl font-bold text-yellow-300 mb-2">新伙伴加入！</h3>
+            <p className="text-2xl font-bold text-white">{catchCard.name}</p>
+            <p className="text-sm text-gray-300 mt-2">
+              {catchCard.catchphrase ? `${catchCard.name}说：“${catchCard.catchphrase}！”` : '它开心地加入了你的队伍。'}
+            </p>
+            {catchBonusTexts.length > 0 && (
+              <div className="mt-3 rounded-xl bg-yellow-500/10 border border-yellow-400/30 p-3">
+                {catchBonusTexts.slice(0, 3).map((text, index) => (
+                  <p key={index} className="text-sm text-yellow-100">{text}</p>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => {
+                setCatchCard(null);
+                setCatchBonusTexts([]);
+                handleEndBattle();
+              }}
+              className="mt-5 bg-green-500 text-white px-8 py-3 rounded-xl font-bold text-lg hover:bg-green-400 active:scale-95 transition-all"
+            >
+              去图鉴看看
             </button>
           </div>
         </div>

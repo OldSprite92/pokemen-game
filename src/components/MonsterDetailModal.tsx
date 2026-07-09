@@ -1,5 +1,6 @@
 import { AVATAR_OPTIONS } from './create/StepAvatar';
 import { ELEMENT_CONFIG } from './create/StepElement';
+import { generateMonsterBackstory } from '../game/monsterStory';
 import type { ElementType, Monster } from '../types';
 
 // 副作用：确保此模块不会被 Tree Shaking 移除
@@ -88,6 +89,32 @@ function getSpecies(m: Monster) {
   return speciesMap[m.element] || '未知宝可梦';
 }
 
+function getDisplayHeight(m: Monster) {
+  if (m.height) return `${m.height} m`;
+  const baseByElement: Partial<Record<ElementType, number>> = {
+    bug: 0.4, fairy: 0.6, normal: 0.8, electric: 0.9, grass: 1.0,
+    water: 1.1, fire: 1.2, ice: 1.2, fighting: 1.3, poison: 1.0,
+    ground: 1.4, flying: 1.1, psychic: 1.2, rock: 1.5, ghost: 1.0,
+    dragon: 1.8, dark: 1.2, steel: 1.6, light: 1.3,
+  };
+  return `${((baseByElement[m.element] ?? 1.0) + Math.min(m.level, 10) * 0.05).toFixed(1)} m`;
+}
+
+function getDisplayWeight(m: Monster) {
+  if (m.weight) return `${m.weight} kg`;
+  const baseByElement: Partial<Record<ElementType, number>> = {
+    bug: 8, fairy: 12, normal: 18, electric: 22, grass: 25,
+    water: 28, fire: 30, ice: 32, fighting: 36, poison: 24,
+    ground: 45, flying: 20, psychic: 26, rock: 60, ghost: 10,
+    dragon: 72, dark: 30, steel: 80, light: 24,
+  };
+  return `${((baseByElement[m.element] ?? 20) + Math.min(m.level, 10) * 2).toFixed(1)} kg`;
+}
+
+function getBackstory(m: Monster) {
+  return generateMonsterBackstory(m);
+}
+
 interface MonsterDetailModalProps {
   visible: boolean;
   monster: Monster | null;
@@ -167,6 +194,11 @@ export default function MonsterDetailModal({
           <div className="mt-4 p-3 rounded-xl bg-gray-800/50">
             <p className="text-sm text-gray-300 leading-relaxed">{getDescription(monster)}</p>
           </div>
+
+          <div className="mt-3 p-3 rounded-xl bg-indigo-900/30 border border-indigo-400/20">
+            <h3 className="text-sm font-bold text-indigo-200 mb-2">📜 经历故事</h3>
+            <p className="text-sm text-gray-300 leading-relaxed">{getBackstory(monster)}</p>
+          </div>
         </div>
 
         {/* 种族值 */}
@@ -208,11 +240,11 @@ export default function MonsterDetailModal({
           <div className="grid grid-cols-2 gap-2">
             <div className="p-3 rounded-xl bg-gray-800/50">
               <p className="text-xs text-gray-500 mb-1">身高</p>
-              <p className="text-sm font-bold text-white">{monster.height ? `${monster.height} m` : '?.? m'}</p>
+              <p className="text-sm font-bold text-white">{getDisplayHeight(monster)}</p>
             </div>
             <div className="p-3 rounded-xl bg-gray-800/50">
               <p className="text-xs text-gray-500 mb-1">体重</p>
-              <p className="text-sm font-bold text-white">{monster.weight ? `${monster.weight} kg` : '??.? kg'}</p>
+              <p className="text-sm font-bold text-white">{getDisplayWeight(monster)}</p>
             </div>
             <div className="p-3 rounded-xl bg-gray-800/50">
               <p className="text-xs text-gray-500 mb-1">HP</p>
