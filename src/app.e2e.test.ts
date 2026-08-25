@@ -160,7 +160,7 @@ describe('🎮 宝可梦大冒险 - 完整功能测试', () => {
 
       const result = calculateDamage(attacker, defender, skill);
       expect(result.damage).toBeGreaterThan(0);
-      expect(result.damage).toBeLessThanOrEqual(30);
+      expect(result.damage).toBeLessThanOrEqual(36);
       expect(result.isCritical || !result.isCritical).toBe(true); // boolean
     });
 
@@ -290,12 +290,14 @@ describe('🎮 宝可梦大冒险 - 完整功能测试', () => {
       });
     });
 
-    it('3个预设大陆', () => {
+    it('5个预设大陆，包含毒系和一般系地图', () => {
       const continents = getPresetContinents();
-      expect(continents.length).toBe(3);
+      expect(continents.length).toBe(5);
       expect(continents.map((c: { name: string }) => c.name)).toContain('火山岛');
       expect(continents.map((c: { name: string }) => c.name)).toContain('冰雪大陆');
       expect(continents.map((c: { name: string }) => c.name)).toContain('丛林秘境');
+      expect(continents.map((c: { name: string }) => c.name)).toContain('毒雾沼泽');
+      expect(continents.map((c: { name: string }) => c.name)).toContain('星星原野');
     });
 
     it('创建自定义大陆', () => {

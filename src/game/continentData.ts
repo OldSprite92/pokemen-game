@@ -1,5 +1,103 @@
 import type { Continent, MapCell, CellType, ElementType } from '../types';
 
+function getReachableCellKeys(cells: MapCell[], size: number) {
+  const center = Math.floor(size / 2);
+  const byPosition = new Map(cells.map((cell) => [`${cell.x},${cell.y}`, cell]));
+  const reachable = new Set<string>();
+  const queue = [{ x: center, y: center }];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const key = `${current.x},${current.y}`;
+    if (reachable.has(key)) continue;
+    const cell = byPosition.get(key);
+    if (!cell || cell.type === 'blocked') continue;
+    reachable.add(key);
+
+    [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dx, dy]) => {
+      const x = current.x + dx;
+      const y = current.y + dy;
+      if (x >= 0 && x < size && y >= 0 && y < size) queue.push({ x, y });
+    });
+  }
+
+  return reachable;
+}
+
+/** 从远离起点、实际能走到的位置中随机放置 Boss，避免形成固定路线。 */
+function placeBoss(cells: MapCell[], size: number): MapCell[] {
+  const center = Math.floor(size / 2);
+  const minimumDistance = Math.max(3, Math.ceil(size * 0.6));
+  const reachable = getReachableCellKeys(cells, size);
+  const candidates = cells.filter((cell) => {
+    const distance = Math.abs(cell.x - center) + Math.abs(cell.y - center);
+    return cell.type !== 'blocked'
+      && cell.type !== 'start'
+      && !cell.visited
+      && distance >= minimumDistance
+      && reachable.has(`${cell.x},${cell.y}`);
+  });
+  const fallbackCandidates = cells.filter((cell) =>
+    cell.type !== 'blocked' && cell.type !== 'start' && !cell.visited && reachable.has(`${cell.x},${cell.y}`)
+  );
+  const pool = candidates.length > 0 ? candidates : fallbackCandidates;
+  const bossCell = pool[Math.floor(Math.random() * pool.length)];
+
+  if (!bossCell) return cells;
+  return cells.map((cell) =>
+    cell.x === bossCell.x && cell.y === bossCell.y
+      ? { ...cell, type: 'boss', revealed: false, visited: false }
+      : cell
+  );
+}
+
+/** 道馆和 Boss 一样必须可达且位置不形成固定跑图规律。 */
+function placeGym(cells: MapCell[], size: number): MapCell[] {
+  const center = Math.floor(size / 2);
+  const minimumDistance = Math.max(3, Math.ceil(size * 0.45));
+  const reachable = getReachableCellKeys(cells, size);
+  const candidates = cells.filter((cell) => {
+    const distance = Math.abs(cell.x - center) + Math.abs(cell.y - center);
+    return cell.type !== 'blocked'
+      && cell.type !== 'start'
+      && cell.type !== 'boss'
+      && !cell.visited
+      && distance >= minimumDistance
+      && reachable.has(`${cell.x},${cell.y}`);
+  });
+  const fallbackCandidates = cells.filter((cell) =>
+    cell.type !== 'blocked' && cell.type !== 'start' && cell.type !== 'boss' && reachable.has(`${cell.x},${cell.y}`)
+  );
+  const pool = candidates.length > 0 ? candidates : fallbackCandidates;
+  const gymCell = pool[Math.floor(Math.random() * pool.length)];
+  if (!gymCell) return cells;
+  return cells.map((cell) =>
+    cell.x === gymCell.x && cell.y === gymCell.y
+      ? { ...cell, type: 'gym', revealed: false, visited: false }
+      : cell
+  );
+}
+
+/** 为旧存档补上一座随机可达道馆，保留原 Boss 位置。 */
+export function ensureGymCell(cells: MapCell[], size: number): MapCell[] {
+  return cells.some((cell) => cell.type === 'gym') ? cells : placeGym(cells, size);
+}
+
+/** 将旧版本固定在右上角的 Boss 迁到随机且可到达的位置。 */
+export function relocateLegacyCornerBoss(cells: MapCell[], size: number): MapCell[] {
+  const hadLegacyBoss = cells.some((cell) => cell.type === 'boss' && cell.x === size - 1 && cell.y === 0);
+  if (!hadLegacyBoss) return cells;
+
+  const clearedCells: MapCell[] = cells.map((cell): MapCell =>
+    cell.type === 'boss'
+      ? { ...cell, type: 'empty' as CellType, revealed: false, visited: cell.x === size - 1 && cell.y === 0 }
+      : cell
+  );
+  return placeBoss(clearedCells, size).map((cell) =>
+    cell.x === size - 1 && cell.y === 0 ? { ...cell, visited: false } : cell
+  );
+}
+
 /** 生成格子地图 */
 export function generateMapGrid(size: number, element: ElementType): MapCell[] {
   const cells: MapCell[] = [];
@@ -38,14 +136,6 @@ export function generateMapGrid(size: number, element: ElementType): MapCell[] {
     }
   }
 
-  // 章节Boss固定在远离起点的右上角，成为清晰终点。
-  const bossCell = cells.find((c) => c.x === size - 1 && c.y === 0);
-  if (bossCell) {
-    bossCell.type = 'boss';
-    bossCell.revealed = false;
-    bossCell.visited = false;
-  }
-
   // 确保起点周围有可达路径（移除起点周围的障碍物）
   const neighbors = [
     [center - 1, center],
@@ -60,7 +150,7 @@ export function generateMapGrid(size: number, element: ElementType): MapCell[] {
     }
   });
 
-  return cells;
+  return placeGym(placeBoss(cells, size), size);
 }
 
 /** 预设大陆 */
@@ -104,6 +194,34 @@ export const PRESET_CONTINENTS: Omit<Continent, 'cells'>[] = [
     gridSize: 10,
     bossName: '丛林霸主',
     bossAvatar: 'tiger',
+    completed: false,
+    isCustom: false,
+  },
+  {
+    id: 'poison-swamp',
+    name: '毒雾沼泽',
+    emoji: '☠️',
+    themeColor: '#7c3aed',
+    bgColor: '#3b0764',
+    element: 'poison',
+    description: '紫色雾气笼罩的湿地，勇敢又细心的训练师才能安全穿过',
+    gridSize: 10,
+    bossName: '毒雾女王',
+    bossAvatar: 'snake',
+    completed: false,
+    isCustom: false,
+  },
+  {
+    id: 'normal-meadow',
+    name: '星星原野',
+    emoji: '⭐',
+    themeColor: '#9ca3af',
+    bgColor: '#1f2937',
+    element: 'normal',
+    description: '看似平静却处处藏着惊喜的原野，一般属性伙伴在这里快乐生活',
+    gridSize: 10,
+    bossName: '原野守护者',
+    bossAvatar: 'rabbit',
     completed: false,
     isCustom: false,
   },
@@ -152,6 +270,7 @@ export const CELL_ICONS: Record<CellType, string> = {
   wild: '👣',
   treasure: '💎',
   rest: '💤',
+  gym: '',
   boss: '👹',
   blocked: '🪨',
 };
@@ -163,6 +282,7 @@ export const CELL_COLORS: Record<CellType, string> = {
   wild: '#ef4444',
   treasure: '#eab308',
   rest: '#3b82f6',
+  gym: '#f59e0b',
   boss: '#a855f7',
   blocked: '#4b5563',
 };
@@ -295,6 +415,7 @@ export const CELL_NAMES: Record<CellType, string> = {
   wild: '野生宝可梦',
   treasure: '宝藏',
   rest: '休息点',
+  gym: '属性道馆',
   boss: 'Boss战',
   blocked: '障碍物',
 };

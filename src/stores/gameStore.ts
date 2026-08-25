@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { BattleStatus, GameState, Monster, BattleState, Trainer, Adventure } from '../types';
+import type { BattleStatus, GameState, Monster, BattleState, Trainer, Adventure, Skill } from '../types';
 import {
   calculateDamage,
   determineFirstTurn,
@@ -7,6 +7,7 @@ import {
   getExpToNextLevel,
   levelUp,
   getBattleStatusConfig,
+  getSkillStatusConfig,
   rollSkillStatus,
 } from '../game/battleEngine';
 import type { DamageResult } from '../game/battleEngine';
@@ -23,7 +24,20 @@ export interface BattleTurnResult {
   damageResult: DamageResult;
   targetHp: number;
   statusDamage?: number;
+  skill?: Skill;
 }
+
+export type EnemyIntentKind = 'attack' | 'charge' | 'shield' | 'status';
+
+export interface EnemyIntent {
+  kind: EnemyIntentKind;
+  skillIndex: number;
+  emoji: string;
+  label: string;
+  description: string;
+}
+
+export type PartnerActionKind = 'burst' | 'interrupt' | 'rescue';
 
 export interface ExtendedBattleState extends BattleState {
   playerCurrentHp: number;
@@ -39,6 +53,11 @@ export interface ExtendedBattleState extends BattleState {
   isPVP: boolean; // 是否PVP对战
   playerStatuses: BattleStatus[];
   enemyStatuses: BattleStatus[];
+  isBoss?: boolean;
+  enemyIntent?: EnemyIntent | null;
+  enemyIntentCountered?: boolean;
+  /** A switched-in partner is protected from the next enemy hit. */
+  playerGuardTurns?: number;
 }
 
 const initialBattleState: ExtendedBattleState = {
@@ -60,6 +79,10 @@ const initialBattleState: ExtendedBattleState = {
   isPVP: false,
   playerStatuses: [],
   enemyStatuses: [],
+  isBoss: false,
+  enemyIntent: null,
+  enemyIntentCountered: false,
+  playerGuardTurns: 0,
 };
 
 function noActionResult(message: string): DamageResult {
@@ -81,6 +104,55 @@ function mergeStatus(statuses: BattleStatus[], incoming: BattleStatus) {
       ? { ...incoming, turnsRemaining: Math.max(status.turnsRemaining, incoming.turnsRemaining) }
       : status
   );
+}
+
+function getEnemyIntent(enemy: Monster, turnCount: number, isBoss: boolean): EnemyIntent {
+  const statusSkillIndex = enemy.skills.findIndex((skill) => Boolean(getSkillStatusConfig(skill)));
+  const strongestSkillIndex = enemy.skills.reduce(
+    (bestIndex, skill, index, skills) => skill.power > skills[bestIndex].power ? index : bestIndex,
+    0
+  );
+  const basicSkillIndex = enemy.skills.length ? turnCount % enemy.skills.length : 0;
+
+  if (isBoss) {
+    const phase = turnCount % 3;
+    if (phase === 0) {
+      return {
+        kind: 'charge', skillIndex: strongestSkillIndex, emoji: '⚡', label: '正在蓄力',
+        description: '用克制攻击命中，就能打断它的大招！',
+      };
+    }
+    if (phase === 1) {
+      return {
+        kind: 'shield', skillIndex: basicSkillIndex, emoji: '🛡️', label: '撑起护盾',
+        description: '普通攻击会变弱，用克制技能可以破盾。',
+      };
+    }
+    if (statusSkillIndex >= 0) {
+      return {
+        kind: 'status', skillIndex: statusSkillIndex, emoji: '🌫️', label: '准备特殊招式',
+        description: '它想给伙伴添麻烦，快先想好对策！',
+      };
+    }
+  }
+
+  if (statusSkillIndex >= 0 && turnCount % 3 === 2) {
+    return {
+      kind: 'status', skillIndex: statusSkillIndex, emoji: '✨', label: '准备特殊招式',
+      description: '这招可能会带来状态效果。',
+    };
+  }
+
+  return {
+    kind: 'attack', skillIndex: basicSkillIndex, emoji: '👀', label: '准备攻击',
+    description: '观察它的属性，选一个合适的技能吧。',
+  };
+}
+
+function scaleDamage(result: DamageResult, multiplier: number, suffix: string): DamageResult {
+  if (result.damage <= 0) return result;
+  const damage = Math.max(1, Math.min(36, Math.round(result.damage * multiplier)));
+  return { ...result, damage, logMessage: `${result.logMessage} ${suffix}` };
 }
 
 function resolveStatusesAtTurnStart(
@@ -124,12 +196,13 @@ interface ExtendedGameState extends GameState {
   wildMonster: Monster | null;
   setWildMonster: (monster: Monster | null) => void;
   setExtendedBattleState: (state: Partial<ExtendedBattleState>) => void;
-  startBattleExtended: (playerMonster: Monster, enemyMonster: Monster, playerTeam?: Monster[], isPVP?: boolean) => void;
+  startBattleExtended: (playerMonster: Monster, enemyMonster: Monster, playerTeam?: Monster[], isPVP?: boolean, isBoss?: boolean) => void;
   executePlayerTurn: (skillIndex: number) => BattleTurnResult | null;
   executeEnemyTurn: () => BattleTurnResult | null;
   checkBattleEnd: () => boolean;
   endBattleExtended: () => void;
   switchPlayerMonster: (monsterIndex: number) => boolean;
+  performPartnerAction: (kind: PartnerActionKind) => BattleTurnResult | null;
   restoreTrainerFromDB: () => Promise<void>;
   restoreAdventureFromDB: () => Promise<void>;
 }
@@ -160,7 +233,10 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
   // 从数据库恢复冒险状态（页面刷新后调用）
   restoreAdventureFromDB: async () => {
     try {
-      const adventures = await db.adventures.toArray();
+      const trainerId = get().currentTrainer?.id;
+      const adventures = trainerId === undefined
+        ? await db.adventures.filter((adventure) => adventure.trainerId === undefined).toArray()
+        : await db.adventures.where('trainerId').equals(trainerId).toArray();
       if (adventures.length > 0) {
         // 使用最新的未完成的冒险
         const latest = adventures
@@ -180,7 +256,12 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
   },
 
   setCurrentTrainer: (trainer: Trainer | null) => {
-    set({ currentTrainer: trainer });
+    const previousTrainerId = get().currentTrainer?.id;
+    const nextTrainerId = trainer?.id;
+    set({
+      currentTrainer: trainer,
+      currentAdventure: previousTrainerId === nextTrainerId ? get().currentAdventure : null,
+    });
     // 同时保存到数据库（更新现有训练师）
     if (trainer && trainer.id) {
       db.trainers.update(trainer.id, { ...trainer }).catch(err => console.error('更新训练师失败:', err));
@@ -196,10 +277,14 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
     })),
 
   setCurrentAdventure: (adventure: Adventure | null) => {
-    set({ currentAdventure: adventure });
+    const trainerId = get().currentTrainer?.id;
+    const scopedAdventure = adventure && trainerId !== undefined
+      ? { ...adventure, trainerId }
+      : adventure;
+    set({ currentAdventure: scopedAdventure });
     // 同时保存到数据库
-    if (adventure) {
-      db.adventures.put(adventure).catch(err => console.error('保存冒险状态失败:', err));
+    if (scopedAdventure) {
+      db.adventures.put(scopedAdventure).catch(err => console.error('保存冒险状态失败:', err));
     }
   },
 
@@ -225,7 +310,7 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
       extendedBattleState: { ...state.extendedBattleState, ...partial },
     })),
 
-  startBattleExtended: (playerMonster: Monster, enemyMonster: Monster, playerTeam?: Monster[], isPVP?: boolean) => {
+  startBattleExtended: (playerMonster: Monster, enemyMonster: Monster, playerTeam?: Monster[], isPVP?: boolean, isBoss = false) => {
     const firstTurn = determineFirstTurn(playerMonster, enemyMonster);
     const team = playerTeam && playerTeam.length > 0 ? playerTeam : [playerMonster];
     const activeIndex = team.findIndex(m => m.id === playerMonster.id);
@@ -245,6 +330,8 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
         playerTeam: team,
         activePlayerIndex: activeIndex >= 0 ? activeIndex : 0,
         isPVP: isPVP || false,
+        isBoss,
+        enemyIntent: getEnemyIntent(enemyMonster, 0, isBoss),
       },
     });
   },
@@ -269,6 +356,9 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
         extendedBattleState: {
           ...s.extendedBattleState,
           playerCurrentHp: statusStart.nextHp,
+          playerTeam: s.extendedBattleState.playerTeam.map((monster, index) =>
+            index === s.extendedBattleState.activePlayerIndex ? { ...monster, hp: statusStart.nextHp } : monster
+          ),
           playerStatuses: statusStart.nextStatuses,
           log: newLog,
           turn: statusStart.nextHp <= 0 ? s.extendedBattleState.turn : 'enemy',
@@ -282,11 +372,24 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
       };
     }
 
-    const damageResult = calculateDamage(player, enemy, skill);
+    let damageResult = calculateDamage(player, enemy, skill);
+    let enemyIntentCountered = state.enemyIntentCountered;
+    const intentLog: string[] = [];
+    if (!damageResult.isMiss && damageResult.damage > 0 && state.enemyIntent) {
+      if (state.enemyIntent.kind === 'shield' && damageResult.effectiveness <= 1) {
+        damageResult = scaleDamage(damageResult, 0.5, '🛡️ 护盾挡住了部分伤害！');
+      } else if (state.enemyIntent.kind === 'shield' && damageResult.effectiveness > 1) {
+        intentLog.push(`💥 ${enemy.name}的护盾被克制攻击打碎了！`);
+      }
+      if (state.enemyIntent.kind === 'charge' && damageResult.effectiveness > 1) {
+        enemyIntentCountered = true;
+        intentLog.push(`⚡ ${enemy.name}的蓄力被打断了！`);
+      }
+    }
     const newEnemyHp = Math.max(0, state.enemyCurrentHp - damageResult.damage);
 
     let nextEnemyStatuses = state.enemyStatuses;
-    const newLog = [...state.log, ...statusStart.messages, damageResult.logMessage];
+    const newLog = [...state.log, ...statusStart.messages, damageResult.logMessage, ...intentLog];
     if (!damageResult.isMiss && damageResult.effectiveness > 0 && damageResult.damage > 0) {
       const newStatus = rollSkillStatus(skill);
       if (newStatus) {
@@ -303,11 +406,15 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
       extendedBattleState: {
         ...s.extendedBattleState,
         playerCurrentHp: statusStart.nextHp,
+        playerTeam: s.extendedBattleState.playerTeam.map((monster, index) =>
+          index === s.extendedBattleState.activePlayerIndex ? { ...monster, hp: statusStart.nextHp } : monster
+        ),
         playerStatuses: statusStart.nextStatuses,
         enemyCurrentHp: newEnemyHp,
         enemyStatuses: nextEnemyStatuses,
         log: newLog,
         lastDamageResult: damageResult,
+        enemyIntentCountered,
         turn: newEnemyHp <= 0 ? s.extendedBattleState.turn : 'enemy',
       },
     }));
@@ -317,13 +424,14 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
       damageResult,
       targetHp: newEnemyHp,
       statusDamage: statusStart.statusDamage,
+      skill,
     };
   },
 
   // 切换宝可梦
   switchPlayerMonster: (monsterIndex: number) => {
     const state = get().extendedBattleState;
-    if (!state.isActive || state.isOver) return false;
+    if (!state.isActive || state.isOver || state.turn !== 'player') return false;
     if (monsterIndex < 0 || monsterIndex >= state.playerTeam.length) return false;
     if (monsterIndex === state.activePlayerIndex) return false;
 
@@ -344,6 +452,7 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
         playerCurrentHp: newMonster.hp,
         playerStatuses: [],
         activePlayerIndex: monsterIndex,
+        playerGuardTurns: 1,
         log: newLog,
         turn: 'enemy', // 替换消耗一回合
       },
@@ -352,12 +461,77 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
     return true;
   },
 
+  performPartnerAction: (kind: PartnerActionKind) => {
+    const state = get().extendedBattleState;
+    if (!state.isActive || state.isOver || state.turn !== 'player') return null;
+
+    const player = state.playerMonster!;
+    const enemy = state.enemyMonster!;
+    let nextEnemyHp = state.enemyCurrentHp;
+    let nextPlayerStatuses = state.playerStatuses;
+    let playerGuardTurns = state.playerGuardTurns ?? 0;
+    let enemyIntentCountered = state.enemyIntentCountered ?? false;
+    let message: string;
+    let result = noActionResult('');
+
+    if (kind === 'burst') {
+      const damage = Math.min(18, nextEnemyHp);
+      nextEnemyHp = Math.max(0, nextEnemyHp - damage);
+      message = `✨ ${createPartnerMoveName(player)}爆发伙伴能量，造成 ${damage} 点伤害！`;
+      result = { ...noActionResult(message), damage };
+    } else if (kind === 'interrupt') {
+      enemyIntentCountered = true;
+      message = `🛑 ${player.name}用伙伴默契打乱了${enemy.name}的节奏！`;
+      result = noActionResult(message);
+    } else {
+      nextPlayerStatuses = [];
+      playerGuardTurns = 1;
+      message = `💞 ${player.name}得到伙伴鼓励，解除了状态并做好防守！`;
+      result = noActionResult(message);
+    }
+
+    if (nextEnemyHp <= 0) message += ` ${enemy.name}倒下了！`;
+    set((s) => ({
+      extendedBattleState: {
+        ...s.extendedBattleState,
+        enemyCurrentHp: nextEnemyHp,
+        playerStatuses: nextPlayerStatuses,
+        playerGuardTurns,
+        enemyIntentCountered,
+        lastDamageResult: result,
+        log: [...s.extendedBattleState.log, message],
+        turn: nextEnemyHp <= 0 ? s.extendedBattleState.turn : 'enemy',
+      },
+    }));
+    return { attacker: 'player', damageResult: result, targetHp: nextEnemyHp };
+  },
+
   executeEnemyTurn: () => {
     const state = get().extendedBattleState;
     if (!state.isActive || state.isOver || state.turn !== 'enemy') return null;
 
     const player = state.playerMonster!;
     const enemy = state.enemyMonster!;
+
+    if (state.enemyIntentCountered) {
+      const nextTurnCount = state.turnCount + 1;
+      const message = `⚡ ${enemy.name}的蓄力被打断，这回合没能出招！`;
+      set((s) => ({
+        extendedBattleState: {
+          ...s.extendedBattleState,
+          enemyIntentCountered: false,
+          enemyIntent: getEnemyIntent(enemy, nextTurnCount, s.extendedBattleState.isBoss ?? false),
+          log: [...s.extendedBattleState.log, message],
+          turn: 'player',
+          turnCount: nextTurnCount,
+        },
+      }));
+      return {
+        attacker: 'enemy',
+        damageResult: noActionResult(message),
+        targetHp: state.playerCurrentHp,
+      };
+    }
 
     const statusStart = resolveStatusesAtTurnStart(state.enemyStatuses, state.enemyCurrentHp, enemy.name);
     if (statusStart.nextHp <= 0 || statusStart.shouldSkip) {
@@ -373,6 +547,7 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
           log: newLog,
           turn: statusStart.nextHp <= 0 ? s.extendedBattleState.turn : 'player',
           turnCount: s.extendedBattleState.turnCount + 1,
+          enemyIntent: getEnemyIntent(enemy, s.extendedBattleState.turnCount + 1, s.extendedBattleState.isBoss ?? false),
         },
       }));
       return {
@@ -383,11 +558,17 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
       };
     }
 
-    // AI：随机选择一个技能
-    const skillIndex = Math.floor(Math.random() * enemy.skills.length);
+    // 敌方先展示意图，再按意图使用对应技能；避免完全随机导致无法预判。
+    const skillIndex = state.enemyIntent?.skillIndex ?? 0;
     const skill = enemy.skills[skillIndex];
 
-    const damageResult = calculateDamage(enemy, player, skill);
+    let damageResult = calculateDamage(enemy, player, skill);
+    if (state.enemyIntent?.kind === 'charge' && !damageResult.isMiss) {
+      damageResult = scaleDamage(damageResult, 1.35, '⚡ 蓄力攻击爆发了！');
+    }
+    if ((state.playerGuardTurns ?? 0) > 0 && !damageResult.isMiss) {
+      damageResult = scaleDamage(damageResult, 0.7, '🛡️ 换人保护挡住了一部分伤害！');
+    }
     const newPlayerHp = Math.max(0, state.playerCurrentHp - damageResult.damage);
 
     let nextPlayerStatuses = state.playerStatuses;
@@ -410,11 +591,17 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
         enemyCurrentHp: statusStart.nextHp,
         enemyStatuses: statusStart.nextStatuses,
         playerCurrentHp: newPlayerHp,
+        playerTeam: s.extendedBattleState.playerTeam.map((monster, index) =>
+          index === s.extendedBattleState.activePlayerIndex ? { ...monster, hp: newPlayerHp } : monster
+        ),
         playerStatuses: nextPlayerStatuses,
         log: newLog,
         lastDamageResult: damageResult,
         turn: newPlayerHp <= 0 ? s.extendedBattleState.turn : 'player',
         turnCount: s.extendedBattleState.turnCount + 1,
+        enemyIntent: getEnemyIntent(enemy, s.extendedBattleState.turnCount + 1, s.extendedBattleState.isBoss ?? false),
+        enemyIntentCountered: false,
+        playerGuardTurns: 0,
       },
     }));
 
@@ -423,6 +610,7 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
       damageResult,
       targetHp: newPlayerHp,
       statusDamage: statusStart.statusDamage,
+      skill,
     };
   },
 
@@ -516,3 +704,8 @@ export const useGameStore = create<ExtendedGameState>((set, get) => ({
     });
   },
 }));
+
+function createPartnerMoveName(monster: Monster): string {
+  const strongest = [...monster.skills].sort((a, b) => b.power - a.power)[0];
+  return strongest?.name ? `${monster.name}的${strongest.name}` : `${monster.name}的伙伴大招`;
+}

@@ -7,6 +7,7 @@ import { ELEMENT_CONFIG } from '../components/create/StepElement';
 import TrainerAvatar from '../components/TrainerAvatar';
 import { getChapterConfig } from '../game/chapterSystem';
 import { DAILY_TASKS, getDailyTaskState, type DailyTaskState } from '../game/dailyTasks';
+import { APP_VERSION } from '../game/appVersion';
 import type { Continent, Monster } from '../types';
 
 const menuItems = [
@@ -15,6 +16,8 @@ const menuItems = [
   { to: '/battle-select', label: '⚔️ 开始对战', color: 'bg-green-500 hover:bg-green-600', emoji: '⚔️' },
   { to: '/multiplayer', label: '🌐 家庭联机', color: 'bg-pink-500 hover:bg-pink-600', emoji: '🌐' },
   { to: '/pokedex', label: '📖 宝可梦图鉴', color: 'bg-blue-500 hover:bg-blue-600', emoji: '📖' },
+  { to: '/backpack', label: '🎒 训练师背包', color: 'bg-cyan-600 hover:bg-cyan-700', emoji: '🎒' },
+  { to: '/hospital', label: '🏥 宝可梦医院', color: 'bg-rose-500 hover:bg-rose-600', emoji: '🏥' },
   { to: '/trainer', label: '🧑‍🎤 训练师', color: 'bg-purple-500 hover:bg-purple-600', emoji: '🧑‍🎤' },
 ];
 
@@ -29,7 +32,9 @@ export default function HomePage() {
   useEffect(() => {
     if (currentTrainer && currentTrainer.monsterIds.length > 0) {
       db.monsters.bulkGet(currentTrainer.monsterIds).then((monsters) => {
-        setTrainerMonsters(monsters.filter((m): m is Monster => m !== undefined));
+        setTrainerMonsters(
+          monsters.filter((m): m is Monster => m !== undefined && m.trainerId === currentTrainer.id)
+        );
       });
     } else {
       setTrainerMonsters([]);
@@ -219,6 +224,7 @@ export default function HomePage() {
       <p className="home-tip text-sm text-gray-500 mt-6">
         👆 点击按钮开始游戏吧！
       </p>
+      <p className="home-version text-xs font-bold text-gray-600">版本 {APP_VERSION}</p>
     </div>
   );
 }

@@ -46,19 +46,20 @@ describe('战斗引擎边界测试', () => {
       expect(getTypeEffectiveness('fighting', 'normal')).toBe(2);
     });
 
-    it('大部分属性对普通属性无克制', () => {
-      const elements: Monster['element'][] = ['fire', 'water', 'grass', 'electric', 'ice', 'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy', 'light'];
+    it('除幽灵外，大部分属性对普通属性无克制', () => {
+      const elements: Monster['element'][] = ['fire', 'water', 'grass', 'electric', 'ice', 'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'dragon', 'dark', 'steel', 'fairy', 'light'];
       elements.forEach((el) => {
         const effectiveness = getTypeEffectiveness(el, 'normal');
         expect(effectiveness).toBe(1);
       });
     });
 
-    it('普通属性对其他属性无克制', () => {
-      const elements: Monster['element'][] = ['fire', 'water', 'grass', 'electric', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy', 'light'];
+    it('普通属性对幽灵无效，对其他属性无克制', () => {
+      const elements: Monster['element'][] = ['fire', 'water', 'grass', 'electric', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'dragon', 'dark', 'steel', 'fairy', 'light'];
       elements.forEach((el) => {
         expect(getTypeEffectiveness('normal', el)).toBe(1);
       });
+      expect(getTypeEffectiveness('normal', 'ghost')).toBe(0);
     });
 
     it('龙属性只克制龙属性', () => {
@@ -80,7 +81,7 @@ describe('战斗引擎边界测试', () => {
 
       const result = calculateDamage(attacker, defender, skill);
       if (!result.isMiss) {
-        expect(result.damage).toBeGreaterThanOrEqual(10);
+        expect(result.damage).toBeGreaterThanOrEqual(4);
       }
     });
 
@@ -91,7 +92,7 @@ describe('战斗引擎边界测试', () => {
 
       const result = calculateDamage(attacker, defender, skill);
       if (!result.isMiss) {
-        expect(result.damage).toBeLessThanOrEqual(30);
+        expect(result.damage).toBeLessThanOrEqual(36);
       }
     });
 
@@ -102,7 +103,7 @@ describe('战斗引擎边界测试', () => {
 
       const result = calculateDamage(attacker, defender, skill);
       if (!result.isMiss) {
-        expect(result.damage).toBeGreaterThanOrEqual(10);
+        expect(result.damage).toBeGreaterThanOrEqual(4);
       }
     });
 

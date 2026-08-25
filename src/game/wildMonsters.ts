@@ -16,6 +16,7 @@ export interface WildMonsterConfig {
 /** 1. 粉仙猪 - 草+妖精 */
 export const FEN_XIAN_PIG: Monster = {
   name: '粉仙猪',
+  elements: ['grass', 'fairy'],
   element: 'grass',
   skills: [
     createSkill('花瓣舞', 'grass', 20, 90, '撒出粉色花瓣攻击'),
@@ -39,6 +40,7 @@ export const FEN_XIAN_PIG: Monster = {
 /** 2. 炎鬃犬 - 火+岩石 */
 export const YAN_ZONG_DOG: Monster = {
   name: '炎鬃犬',
+  elements: ['fire', 'rock'],
   element: 'fire',
   skills: [
     createSkill('火焰牙', 'fire', 25, 90, '用燃烧的双牙撕咬'),
@@ -61,6 +63,7 @@ export const YAN_ZONG_DOG: Monster = {
 /** 3. 幽冥蝠 - 幽灵+毒 */
 export const YOU_MING_BAT: Monster = {
   name: '幽冥蝠',
+  elements: ['ghost', 'poison'],
   element: 'ghost',
   skills: [
     createSkill('暗影球', 'ghost', 25, 90, '投掷暗影能量球'),
@@ -84,6 +87,7 @@ export const YOU_MING_BAT: Monster = {
 /** 4. 冻原鹅 - 冰+飞行 */
 export const DONG_YUAN_GOOSE: Monster = {
   name: '冻原鹅',
+  elements: ['ice', 'flying'],
   element: 'ice',
   skills: [
     createSkill('冰冻之风', 'ice', 20, 95, '刮起冰冻的寒风'),
@@ -106,6 +110,7 @@ export const DONG_YUAN_GOOSE: Monster = {
 /** 5. 雷冠犀 - 电+地面 */
 export const LEI_GUAN_RHINO: Monster = {
   name: '雷冠犀',
+  elements: ['electric', 'ground'],
   element: 'electric',
   skills: [
     createSkill('雷电角', 'electric', 30, 85, '用带电的角撞击'),
@@ -128,6 +133,7 @@ export const LEI_GUAN_RHINO: Monster = {
 /** 6. 藻铠龟 - 水+钢 */
 export const ZAO_KAI_TURTLE: Monster = {
   name: '藻铠龟',
+  elements: ['water', 'steel'],
   element: 'water',
   skills: [
     createSkill('水炮', 'water', 30, 85, '喷射高压水流'),
@@ -151,6 +157,7 @@ export const ZAO_KAI_TURTLE: Monster = {
 /** 7. 裂空鹰 - 岩石+飞行 */
 export const LIE_KONG_EAGLE: Monster = {
   name: '裂空鹰',
+  elements: ['rock', 'flying'],
   element: 'rock',
   skills: [
     createSkill('岩石投掷', 'rock', 25, 90, '从空中投掷岩石'),
@@ -173,6 +180,7 @@ export const LIE_KONG_EAGLE: Monster = {
 /** 8. 樱尾狐 - 一般+妖精 */
 export const YING_WEI_FOX: Monster = {
   name: '樱尾狐',
+  elements: ['normal', 'fairy'],
   element: 'normal',
   skills: [
     createSkill('尾巴拍打', 'normal', 20, 95, '用蓬松的尾巴拍打'),
@@ -195,6 +203,7 @@ export const YING_WEI_FOX: Monster = {
 /** 9. 炽泥鳄 - 火+地面 */
 export const CHI_NI_CROC: Monster = {
   name: '炽泥鳄',
+  elements: ['fire', 'ground'],
   element: 'fire',
   skills: [
     createSkill('火焰喷射', 'fire', 30, 85, '喷出炽热火焰'),
@@ -220,6 +229,7 @@ import { GLOW_FROG } from './starterMonsters';
 /** 11. 磁羽燕 - 电+钢 */
 export const CI_YU_SWALLOW: Monster = {
   name: '磁羽燕',
+  elements: ['electric', 'steel'],
   element: 'electric',
   skills: [
     createSkill('电磁冲击', 'electric', 25, 90, '用电磁力冲击敌人'),
@@ -242,6 +252,7 @@ export const CI_YU_SWALLOW: Monster = {
 /** 12. 大舌象 - 格斗+恶 */
 export const DA_SHE_ELEPHANT: Monster = {
   name: '大舌象',
+  elements: ['fighting', 'dark'],
   element: 'fighting',
   skills: [
     createSkill('重踏', 'fighting', 30, 85, '用巨力踩踏'),
@@ -264,6 +275,7 @@ export const DA_SHE_ELEPHANT: Monster = {
 /** 13. 香草猪 - 草+妖精 */
 export const XIANG_CAO_PIG: Monster = {
   name: '香草猪',
+  elements: ['grass', 'fairy'],
   element: 'grass',
   skills: [
     createSkill('香草气息', 'grass', 20, 95, '散发香草气息治愈'),
@@ -287,6 +299,7 @@ export const XIANG_CAO_PIG: Monster = {
 /** 14. 泡泡猪 - 冰+格斗 */
 export const PAO_PAO_PIG: Monster = {
   name: '泡泡猪',
+  elements: ['ice', 'fighting'],
   element: 'ice',
   skills: [
     createSkill('冰冻泡泡', 'ice', 20, 95, '吹出冰冻泡泡'),
@@ -354,6 +367,7 @@ export const SHUI_MIAN_COTTON: Monster = {
 /** 17. 火翼龙 - 火+龙 */
 export const HUO_YI_DRAGON: Monster = {
   name: '火翼龙',
+  elements: ['fire', 'dragon'],
   element: 'fire',
   skills: [
     createSkill('龙焰', 'fire', 35, 80, '喷出龙息火焰'),
@@ -398,6 +412,7 @@ export const BING_JU_LIZARD: Monster = {
 /** 19. 岩陆蜥 - 岩石+钢 */
 export const YAN_LU_LIZARD: Monster = {
   name: '岩陆蜥',
+  elements: ['rock', 'steel'],
   element: 'rock',
   skills: [
     createSkill('岩石粉碎', 'rock', 30, 85, '粉碎岩石攻击'),
@@ -442,6 +457,7 @@ export const SHAN_DIAN_LIZARD: Monster = {
 /** 21. 翼幻接龙 - 龙+恶 */
 export const YI_HUAN_DRAGON: Monster = {
   name: '翼幻接龙',
+  elements: ['dragon', 'dark'],
   element: 'dragon',
   skills: [
     createSkill('龙之怒', 'dragon', 35, 80, '释放龙之怒火'),
@@ -464,6 +480,7 @@ export const YI_HUAN_DRAGON: Monster = {
 /** 22. 雪百纳 - 冰+水 */
 export const XUE_BAI_NA: Monster = {
   name: '雪百纳',
+  elements: ['ice', 'water'],
   element: 'ice',
   skills: [
     createSkill('冰雪风暴', 'ice', 30, 85, '召唤冰雪风暴'),
@@ -486,6 +503,7 @@ export const XUE_BAI_NA: Monster = {
 /** 23. 黑仙猪 - 恶+妖精 */
 export const HEI_XIAN_PIG: Monster = {
   name: '黑仙猪',
+  elements: ['dark', 'fairy'],
   element: 'dark',
   skills: [
     createSkill('暗影冲击', 'dark', 30, 85, '用暗影力量冲击'),
@@ -529,6 +547,102 @@ export const LIE_GUANG_BIRD: Monster = {
   createdAt: new Date(),
 };
 
+/** 25. 剧冰虫 - 冰+虫 */
+export const JU_BING_CHONG: Monster = {
+  name: '剧冰虫',
+  elements: ['ice', 'bug'],
+  element: 'ice',
+  skills: [
+    createSkill('冰丝缠绕', 'ice', 22, 95, '吐出冰冷丝线缠住对手'),
+    createSkill('冻甲虫鸣', 'bug', 25, 90, '用带冰霜的虫鸣震慑对手'),
+    createSkill('冰晶虫茧', 'ice', 0, 100, '缩进冰晶虫茧保护自己'),
+  ],
+  avatar: 'icebug',
+  hp: 78,
+  maxHp: 78,
+  attack: 58,
+  defense: 68,
+  speed: 48,
+  level: 6,
+  exp: 0,
+  expToNext: 100,
+  createdBy: 'system',
+  createdAt: new Date(),
+};
+
+/** 26. 太阳碟 - 火+虫 */
+export const TAI_YANG_DIE: Monster = {
+  name: '太阳碟',
+  elements: ['fire', 'bug'],
+  element: 'fire',
+  skills: [
+    createSkill('日焰粉', 'fire', 24, 95, '洒下会发热的金色鳞粉'),
+    createSkill('烈阳振翅', 'bug', 28, 88, '扇动翅膀卷起灼热旋风'),
+    createSkill('光茧守护', 'bug', 0, 100, '张开闪亮翅膀保护自己'),
+  ],
+  avatar: 'sunbutterfly',
+  hp: 72,
+  maxHp: 72,
+  attack: 70,
+  defense: 48,
+  speed: 82,
+  level: 7,
+  exp: 0,
+  expToNext: 100,
+  createdBy: 'system',
+  createdAt: new Date(),
+};
+
+/** 27. 大地法师 - 地面+超能力 */
+export const DA_DI_FA_SHI: Monster = {
+  name: '大地法师',
+  elements: ['ground', 'psychic'],
+  element: 'ground',
+  skills: [
+    createSkill('念力地刺', 'ground', 28, 90, '用念力掀起尖锐的地刺'),
+    createSkill('心灵沙暴', 'psychic', 25, 92, '卷起能扰乱心神的沙暴'),
+    createSkill('岩壁守护', 'ground', 0, 100, '召唤岩壁保护伙伴'),
+    createSkill('意念束缚', 'psychic', 18, 95, '用意念让对手难以行动'),
+  ],
+  // 临时占位：后续美术阶段替换为“大地法师”手绘卡通立绘。
+  avatar: 'earthmage',
+  hp: 88,
+  maxHp: 88,
+  attack: 68,
+  defense: 72,
+  speed: 54,
+  level: 7,
+  exp: 0,
+  expToNext: 100,
+  createdBy: 'system',
+  createdAt: new Date(),
+};
+
+/** 28. 果冻猪 - 水+超能力 */
+export const GUO_DONG_ZHU: Monster = {
+  name: '果冻猪',
+  elements: ['water', 'psychic'],
+  element: 'water',
+  skills: [
+    createSkill('果冻水炮', 'water', 26, 92, '喷出弹力十足的水团'),
+    createSkill('心灵泡泡', 'psychic', 22, 95, '用念力泡泡困住对手'),
+    createSkill('水膜护盾', 'water', 0, 100, '披上一层会反光的水膜'),
+    createSkill('预感撞击', 'psychic', 30, 84, '预判对手动作后突然冲撞'),
+  ],
+  // 临时占位：后续美术阶段替换为“果冻猪”手绘卡通立绘。
+  avatar: 'jellypig',
+  hp: 82,
+  maxHp: 82,
+  attack: 62,
+  defense: 58,
+  speed: 70,
+  level: 6,
+  exp: 0,
+  expToNext: 100,
+  createdBy: 'system',
+  createdAt: new Date(),
+};
+
 // ============ 所有野生宝可梦配置 ============
 
 export const ALL_WILD_MONSTERS: WildMonsterConfig[] = [
@@ -556,6 +670,10 @@ export const ALL_WILD_MONSTERS: WildMonsterConfig[] = [
   { monster: XUE_BAI_NA, minLevel: 5, maxLevel: 10, encounterRate: 8, preferredElements: ['ice', 'water'] },
   { monster: HEI_XIAN_PIG, minLevel: 6, maxLevel: 10, encounterRate: 6, preferredElements: ['dark', 'fairy'] },
   { monster: LIE_GUANG_BIRD, minLevel: 8, maxLevel: 10, encounterRate: 4, preferredElements: ['light'] },
+  { monster: JU_BING_CHONG, minLevel: 4, maxLevel: 8, encounterRate: 10, preferredElements: ['ice', 'bug'] },
+  { monster: TAI_YANG_DIE, minLevel: 5, maxLevel: 9, encounterRate: 9, preferredElements: ['fire', 'bug'] },
+  { monster: DA_DI_FA_SHI, minLevel: 5, maxLevel: 9, encounterRate: 9, preferredElements: ['ground', 'psychic'] },
+  { monster: GUO_DONG_ZHU, minLevel: 4, maxLevel: 8, encounterRate: 11, preferredElements: ['water', 'psychic'] },
 ];
 
 /** 根据大陆属性获取可遇到的野生宝可梦池 */

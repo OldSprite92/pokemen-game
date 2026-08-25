@@ -8,6 +8,7 @@ import VoiceTextInput from '../components/VoiceTextInput';
 import {
   MAP_DIFFICULTIES,
   createDifficultyCells,
+  getDifficultyExploration,
   getMapDifficultyConfig,
   hasCompletedDifficulty,
   isDifficultyUnlocked,
@@ -67,11 +68,13 @@ export default function AdventurePage() {
   };
 
   const loadTrainerMonsters = async () => {
-    const monsters = await db.monsters.toArray();
-    const trainerIds = currentTrainer?.monsterIds ?? [];
-    setTrainerMonsters(trainerIds.length > 0
-      ? monsters.filter((monster) => monster.id && trainerIds.includes(monster.id))
-      : monsters);
+    const trainerId = currentTrainer?.id;
+    if (trainerId === undefined) {
+      setTrainerMonsters([]);
+      return;
+    }
+    const monsters = await db.monsters.where('trainerId').equals(trainerId).toArray();
+    setTrainerMonsters(monsters);
   };
 
   const handleSelectContinent = async (continent: Continent, difficulty: MapDifficulty) => {
@@ -89,20 +92,35 @@ export default function AdventurePage() {
       return;
     }
 
+    const alreadyCompleted = hasCompletedDifficulty(continent.id, difficulty, currentTrainer?.id, continent.completed);
+    const savedExploration = getDifficultyExploration(continent.id, difficulty, currentTrainer?.id);
     const startPos = { x: Math.floor(continent.gridSize / 2), y: Math.floor(continent.gridSize / 2) };
-    const difficultyCells = createDifficultyCells(continent, difficulty);
+    // A finished map resumes its saved route.  Older completed maps that predate
+    // snapshots reveal their existing route rather than asking a child to rediscover it.
+    const difficultyCells = savedExploration?.cells
+      ?? (alreadyCompleted
+        ? continent.cells.map((cell) => ({ ...cell, revealed: true, visited: true }))
+        : createDifficultyCells(continent, difficulty));
     await db.continents.update(continent.id, { cells: difficultyCells });
     setContinents((prev) => prev.map((item) =>
       item.id === continent.id ? { ...item, cells: difficultyCells } : item
     ));
 
     // 保存当前冒险到store
-    useGameStore.getState().setCurrentAdventure({
-      continentId: continent.id,
-      difficulty,
-      currentPosition: startPos,
-      events: [],
-    });
+    useGameStore.getState().setCurrentAdventure(savedExploration
+      ? {
+        ...savedExploration.adventure,
+        trainerId: currentTrainer?.id,
+        continentId: continent.id,
+        difficulty,
+      }
+      : {
+        trainerId: currentTrainer?.id,
+        continentId: continent.id,
+        difficulty,
+        currentPosition: startPos,
+        events: [],
+      });
     navigate(`/map/${continent.id}`);
   };
 
@@ -140,7 +158,7 @@ export default function AdventurePage() {
   return (
     <div className="adventure-page flex flex-col min-h-[100dvh] p-4 gap-4">
       {/* 顶部 */}
-      <div className="flex items-center justify-between">
+      <div className="page-topbar sticky top-0 z-40 flex items-center justify-between">
         <Link to="/" className="text-blue-400 hover:text-blue-300 text-lg font-bold">
           ← 返回
         </Link>
@@ -255,8 +273,9 @@ export default function AdventurePage() {
             className="bg-gray-700 border-2 border-gray-600 rounded-lg px-4 py-2 text-white text-center"
             maxLength={12}
           />
-          <div className="grid grid-cols-4 gap-2">
-            {Object.entries(ELEMENT_CONFIG).slice(0, 8).map(([key, cfg]) => (
+          <p className="text-sm text-gray-300">选择大陆属性（全部属性都可以创建地图）：</p>
+          <div className="grid max-h-64 grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4">
+            {Object.entries(ELEMENT_CONFIG).map(([key, cfg]) => (
               <button
                 key={key}
                 onClick={() => {

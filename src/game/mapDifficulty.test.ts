@@ -3,10 +3,12 @@ import type { Continent, Monster } from '../types';
 import {
   createBossMonster,
   createDifficultyCells,
+  getDifficultyExploration,
   hasCompletedDifficulty,
   isDifficultyUnlocked,
   markDifficultyComplete,
   scaleMonsterForDifficulty,
+  saveDifficultyExploration,
 } from './mapDifficulty';
 
 const continent: Continent = {
@@ -88,5 +90,15 @@ describe('mapDifficulty', () => {
     expect(createDifficultyCells(continent, 'easy').length).toBe(100);
     expect(createDifficultyCells(continent, 'hard').length).toBe(100);
     expect(createDifficultyCells(continent, 'hell').length).toBe(100);
+  });
+
+  it('通关地图会保存探索状态，不会在再次进入时重掷路线', () => {
+    const cells = createDifficultyCells(continent, 'easy').map((cell) => ({ ...cell, revealed: true }));
+    const adventure = { continentId: continent.id, difficulty: 'easy' as const, currentPosition: { x: 3, y: 2 }, events: [] };
+    saveDifficultyExploration(continent.id, 'easy', 7, cells, adventure);
+
+    const restored = getDifficultyExploration(continent.id, 'easy', 7);
+    expect(restored?.cells).toEqual(cells);
+    expect(restored?.adventure.currentPosition).toEqual({ x: 3, y: 2 });
   });
 });

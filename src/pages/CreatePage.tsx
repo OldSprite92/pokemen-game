@@ -67,6 +67,11 @@ export default function CreatePage() {
 
   const handleSave = async () => {
     if (!canProceed()) return;
+    if (!currentTrainer?.id) {
+      alert('请先创建训练师，再创造伙伴。');
+      navigate('/trainer');
+      return;
+    }
 
     setIsSaving(true);
 
@@ -83,7 +88,9 @@ export default function CreatePage() {
       }));
 
     const monster: Monster = {
+      trainerId: currentTrainer.id,
       name: name.trim(),
+      elements,
       element: elements[0] || 'fire',
       skills: validSkills,
       avatar,
@@ -203,7 +210,7 @@ export default function CreatePage() {
   return (
     <div className="create-page flex flex-col min-h-[100dvh] p-4 gap-4">
       {/* 顶部导航 */}
-      <div className="flex items-center justify-between">
+      <div className="page-topbar sticky top-0 z-40 flex items-center justify-between">
         <Link
           to="/"
           className="text-blue-400 hover:text-blue-300 text-lg font-bold flex items-center gap-1"

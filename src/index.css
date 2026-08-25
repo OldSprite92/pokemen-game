@@ -197,6 +197,157 @@ body {
   overflow-x: hidden;
 }
 
+.page-topbar {
+  background: rgba(26, 26, 46, 0.96);
+  min-height: 48px;
+  padding-block: 6px;
+  backdrop-filter: blur(10px);
+}
+
+.battle-effect-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.battle-monster-avatar {
+  z-index: 11;
+  transform-origin: center;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+}
+
+.battle-monster-avatar-player.is-attacking {
+  animation: battle-lunge-right 680ms cubic-bezier(.2, .8, .25, 1);
+}
+
+.battle-monster-avatar-enemy.is-attacking {
+  animation: battle-lunge-left 680ms cubic-bezier(.2, .8, .25, 1);
+}
+
+.battle-monster-avatar.is-hit {
+  animation: battle-hit 620ms ease-out;
+}
+
+.battle-monster-avatar.is-dodging {
+  animation: battle-dodge 620ms ease-out;
+}
+
+.battle-skill-callout {
+  position: absolute;
+  top: 45%;
+  z-index: 2;
+  max-width: 58%;
+  padding: 4px 9px;
+  border: 1px solid rgba(255, 255, 255, .45);
+  border-radius: 999px;
+  background: rgba(12, 18, 38, .9);
+  color: #fff5a6;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  animation: battle-callout 760ms ease-out both;
+}
+
+.battle-skill-callout.is-player-attack { left: 12%; }
+.battle-skill-callout.is-enemy-attack { right: 12%; }
+
+.battle-skill-effect {
+  position: absolute;
+  top: 42%;
+  width: 60px;
+  height: 60px;
+  color: #ffffff;
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+.battle-skill-effect.is-player-attack { left: 9%; animation: battle-skill-fly-right 700ms cubic-bezier(.15, .7, .3, 1) both; }
+.battle-skill-effect.is-enemy-attack { right: 9%; animation: battle-skill-fly-left 700ms cubic-bezier(.15, .7, .3, 1) both; }
+
+.battle-skill-core,
+.battle-skill-spark {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  text-shadow: 0 0 10px currentColor;
+}
+
+.battle-skill-core { inset: 0; font-size: 42px; animation: battle-core-spin 700ms ease-out both; }
+.battle-skill-spark { font-size: 22px; opacity: .8; }
+.spark-one { top: -8px; left: -6px; }
+.spark-two { right: -10px; bottom: 2px; }
+.spark-three { left: 20px; bottom: -14px; }
+
+.effect-fire { color: #ff7a45; }
+.effect-water { color: #65c7ff; }
+.effect-grass { color: #8ee273; }
+.effect-electric { color: #ffe45d; }
+.effect-ice { color: #b8f4ff; }
+.effect-poison { color: #d88cff; }
+.effect-ghost, .effect-dark { color: #ae90ff; }
+.effect-fairy, .effect-light { color: #fff1ab; }
+.effect-steel, .effect-rock, .effect-ground { color: #d4c1a1; }
+
+@keyframes battle-lunge-right {
+  35% { transform: translateX(34px) scale(1.16) rotate(5deg); }
+  65% { transform: translateX(10px) scale(.97) rotate(-2deg); }
+  100% { transform: translateX(0) scale(1) rotate(0); }
+}
+
+@keyframes battle-lunge-left {
+  35% { transform: translateX(-34px) scale(1.16) rotate(-5deg); }
+  65% { transform: translateX(-10px) scale(.97) rotate(2deg); }
+  100% { transform: translateX(0) scale(1) rotate(0); }
+}
+
+@keyframes battle-hit {
+  0%, 100% { transform: translateX(0); filter: brightness(1); }
+  22%, 58% { transform: translateX(7px); filter: brightness(2.1) saturate(1.8); }
+  40%, 76% { transform: translateX(-7px); }
+}
+
+@keyframes battle-dodge {
+  35% { transform: translateY(-15px) translateX(18px) rotate(8deg); opacity: .65; }
+  100% { transform: translateY(0) translateX(0) rotate(0); opacity: 1; }
+}
+
+@keyframes battle-skill-fly-right {
+  0% { transform: translate(-8px, 22px) scale(.45); opacity: 0; }
+  55% { transform: translate(185px, -12px) scale(1.05); opacity: 1; }
+  100% { transform: translate(250px, -6px) scale(1.7); opacity: 0; }
+}
+
+@keyframes battle-skill-fly-left {
+  0% { transform: translate(8px, 22px) scale(.45); opacity: 0; }
+  55% { transform: translate(-185px, -12px) scale(1.05); opacity: 1; }
+  100% { transform: translate(-250px, -6px) scale(1.7); opacity: 0; }
+}
+
+@keyframes battle-core-spin {
+  0% { transform: rotate(-18deg) scale(.4); }
+  60% { transform: rotate(22deg) scale(1.25); }
+  100% { transform: rotate(0) scale(1); }
+}
+
+@keyframes battle-callout {
+  0% { opacity: 0; transform: translateY(10px) scale(.85); }
+  20%, 70% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-8px) scale(.96); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-monster-avatar.is-attacking,
+  .battle-monster-avatar.is-hit,
+  .battle-monster-avatar.is-dodging,
+  .battle-skill-callout,
+  .battle-skill-effect,
+  .battle-skill-core {
+    animation-duration: 1ms;
+  }
+}
+
 @media (orientation: landscape) and (min-width: 900px) {
   .home-page,
   .create-page,
@@ -305,16 +456,52 @@ body {
   }
 
   .map-page {
-    grid-template-rows: auto auto 1fr;
+    display: grid;
+    grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    align-items: stretch;
+    column-gap: 16px;
+  }
+
+  .map-header {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: start;
+  }
+
+  .map-task-panel {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    max-height: calc(100dvh - 118px);
+    overflow-y: auto;
+  }
+
+  .map-task-grid {
+    grid-template-columns: 1fr;
   }
 
   .map-board-wrap {
-    justify-content: flex-start;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: stretch;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .map-board-wrap > .map-grid {
+    --map-cell-size: min(
+      calc((100dvh - 96px) / var(--map-grid-size, 10)),
+      calc((100vw - 500px) / var(--map-grid-size, 10)),
+      58px
+    );
+    gap: 4px;
+    padding: 6px;
   }
 
   .map-cell {
-    width: clamp(40px, 4.6vw, 56px);
-    height: clamp(40px, 4.6vw, 56px);
+    width: var(--map-cell-size);
+    height: var(--map-cell-size);
   }
 
   .battle-layout {

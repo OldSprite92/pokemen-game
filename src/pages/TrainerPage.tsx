@@ -3,11 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { db } from '../db/database';
 import { useGameStore } from '../stores/gameStore';
 import { STARTER_CONFIG } from '../game/starterMonsters';
-import { ELEMENT_CONFIG } from '../components/create/StepElement';
+import MonsterElementBadges from '../components/MonsterElementBadges';
 import TrainerAvatar from '../components/TrainerAvatar';
 import VoiceTextInput from '../components/VoiceTextInput';
 import { TRAINER_AVATARS, getTrainerAvatarOption, isCustomTrainerAvatar } from '../game/trainerAvatars';
-import type { Monster } from '../types';
+import type { Monster, Trainer } from '../types';
 
 type Step = 'trainer' | 'starter';
 
@@ -80,20 +80,39 @@ export default function TrainerPage() {
     setIsSaving(true);
 
     try {
-      // 先保存初始宝可梦到数据库
-      const starterId = await db.monsters.add(selectedStarter);
-      if (typeof starterId !== 'number') throw new Error('保存宝可梦失败');
+      let savedTrainer: Trainer | null = null;
+      await db.transaction('rw', db.trainers, db.monsters, async () => {
+        const trainerId = await db.trainers.add({
+          name: name.trim(),
+          avatar,
+          monsterIds: [],
+          createdAt: new Date(),
+        });
+        if (typeof trainerId !== 'number') throw new Error('保存训练师失败');
 
-      const trainer = {
-        name: name.trim(),
-        avatar,
-        monsterIds: [starterId],
-        activeMonsterId: starterId,
-        createdAt: new Date(),
-      };
+        const starterId = await db.monsters.add({
+          ...selectedStarter,
+          id: undefined,
+          trainerId,
+          createdAt: new Date(),
+        });
+        if (typeof starterId !== 'number') throw new Error('保存宝可梦失败');
 
-      const id = await db.trainers.add(trainer);
-      setCurrentTrainer({ ...trainer, id });
+        savedTrainer = {
+          id: trainerId,
+          name: name.trim(),
+          avatar,
+          monsterIds: [starterId],
+          activeMonsterId: starterId,
+          createdAt: new Date(),
+        };
+        await db.trainers.update(trainerId, {
+          monsterIds: savedTrainer.monsterIds,
+          activeMonsterId: starterId,
+        });
+      });
+      if (!savedTrainer) throw new Error('保存训练师失败');
+      setCurrentTrainer(savedTrainer);
       setSuccess(true);
       setTimeout(() => {
         navigate('/');
@@ -124,7 +143,7 @@ export default function TrainerPage() {
   return (
     <div className="trainer-page flex flex-col min-h-[100dvh] p-4 gap-4">
       {/* 顶部 */}
-      <div className="flex items-center justify-between">
+      <div className="page-topbar sticky top-0 z-40 flex items-center justify-between">
         <Link to="/" className="text-blue-400 hover:text-blue-300 text-lg font-bold">
           ← 返回
         </Link>
@@ -283,10 +302,8 @@ export default function TrainerPage() {
 
           {/* 初始宝可梦卡片 */}
           <div className="flex flex-col gap-4 w-full max-w-sm">
-            {STARTER_CONFIG.map(({ monster, emoji, bgColor, description, secondaryElement }) => {
+            {STARTER_CONFIG.map(({ monster, emoji, bgColor, description }) => {
               const isSelected = selectedStarter?.name === monster.name;
-              const mainElement = ELEMENT_CONFIG[monster.element];
-              const subElement = ELEMENT_CONFIG[secondaryElement];
 
               return (
                 <button
@@ -304,14 +321,9 @@ export default function TrainerPage() {
                       {emoji}
                     </div>
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
                         <span className="text-lg font-bold text-white">{monster.name}</span>
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-lg" style={{ backgroundColor: mainElement?.color + '30', color: mainElement?.color }}>
-                          {mainElement?.emoji} {mainElement?.label}
-                        </span>
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-lg" style={{ backgroundColor: subElement?.color + '30', color: subElement?.color }}>
-                          {subElement?.emoji} {subElement?.label}
-                        </span>
+                        <MonsterElementBadges monster={monster} />
                       </div>
                       <p className="text-sm text-gray-400">{description}</p>
                       <div className="flex gap-3 mt-2 text-xs text-gray-500">

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../db/database';
 import { useGameStore } from '../stores/gameStore';
 import { ELEMENT_CONFIG } from '../components/create/StepElement';
+import MonsterElementBadges from '../components/MonsterElementBadges';
 import { AVATAR_OPTIONS } from '../components/create/StepAvatar';
 import type { Monster } from '../types';
 
@@ -51,23 +52,41 @@ function createWildMonster(): Monster {
 export default function BattleSelectPage() {
   const navigate = useNavigate();
   const { startBattleExtended } = useGameStore();
+  const currentTrainer = useGameStore((state) => state.currentTrainer);
   const wildMonster = useGameStore((state) => state.wildMonster);
+  const currentAdventure = useGameStore((state) => state.currentAdventure);
   const [monsters, setMonsters] = useState<Monster[]>([]);
   const [selectedMonster, setSelectedMonster] = useState<Monster | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    db.monsters.toArray().then((list) => {
-      setMonsters(list);
+    const trainerId = currentTrainer?.id;
+    if (trainerId === undefined) {
+      setMonsters([]);
+      setLoading(false);
+      return;
+    }
+    db.monsters.where('trainerId').equals(trainerId).toArray().then((list) => {
+      // Map battles may only use the party chosen before setting out.  The
+      // other partners stay safely in the warehouse until the expedition ends.
+      const partyIds = currentAdventure?.mapPartyIds;
+      const available = partyIds?.length ? list.filter((monster) => monster.id !== undefined && partyIds.includes(monster.id)) : list;
+      setMonsters(available);
       setLoading(false);
     });
-  }, []);
+  }, [currentAdventure?.mapPartyIds, currentTrainer?.id]);
 
   const handleStartBattle = () => {
     if (!selectedMonster) return;
     // 使用 store 中的野生宝可梦（从地图页传入的）
     const enemyMonster = wildMonster || createWildMonster();
-    startBattleExtended(selectedMonster, enemyMonster);
+    startBattleExtended(
+      selectedMonster,
+      enemyMonster,
+      monsters,
+      false,
+      currentAdventure?.pendingBattleType === 'boss'
+    );
     navigate('/battle');
   };
 
@@ -83,13 +102,13 @@ export default function BattleSelectPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6 gap-6">
         <div className="text-6xl">🥚</div>
-        <h2 className="text-2xl font-bold text-yellow-300">还没有宝可梦！</h2>
-        <p className="text-lg text-gray-300">先创造一只宝可梦再来对战吧！</p>
+        <h2 className="text-2xl font-bold text-yellow-300">没有可出战的伙伴</h2>
+        <p className="text-lg text-gray-300">地图远征只能使用出发前选好的伙伴，回到地图重新整队吧。</p>
         <button
-          onClick={() => navigate('/create')}
+          onClick={() => navigate(currentAdventure ? `/map/${currentAdventure.continentId}` : '/create')}
           className="bg-yellow-500 text-gray-900 px-6 py-3 rounded-xl font-bold text-lg hover:bg-yellow-400 active:scale-95 transition-all"
         >
-          🎨 去创造宝可梦
+          {currentAdventure ? '← 回到地图整队' : '🎨 去创造宝可梦'}
         </button>
       </div>
     );
@@ -97,7 +116,7 @@ export default function BattleSelectPage() {
 
   return (
     <div className="battle-select-page flex flex-col min-h-[100dvh] p-4 gap-4">
-      <div className="flex items-center justify-between">
+      <div className="page-topbar sticky top-0 z-40 flex items-center justify-between">
         <button
           onClick={() => navigate('/')}
           className="text-blue-400 hover:text-blue-300 text-lg font-bold"
@@ -114,7 +133,6 @@ export default function BattleSelectPage() {
       <div className="flex flex-col gap-3 min-h-0 overflow-y-auto">
         {monsters.map((monster) => {
           const avatar = AVATAR_OPTIONS.find((a) => a.id === monster.avatar);
-          const element = ELEMENT_CONFIG[monster.element];
           const isSelected = selectedMonster?.id === monster.id;
 
           return (
@@ -137,11 +155,9 @@ export default function BattleSelectPage() {
                 {avatar?.emoji || '❓'}
               </div>
               <div className="flex-1 text-left">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-lg font-bold text-white">{monster.name}</span>
-                  <span className="text-sm" style={{ color: element?.color }}>
-                    {element?.emoji} {element?.label}
-                  </span>
+                  <MonsterElementBadges monster={monster} badgeClassName="text-sm font-bold" />
                 </div>
                 <p className="text-sm text-gray-400">
                   Lv.{monster.level} | HP {monster.hp} | 攻击 {monster.attack} | 速度 {monster.speed}

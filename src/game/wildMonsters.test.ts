@@ -27,12 +27,16 @@ import {
   XUE_BAI_NA,
   HEI_XIAN_PIG,
   LIE_GUANG_BIRD,
+  JU_BING_CHONG,
+  TAI_YANG_DIE,
+  DA_DI_FA_SHI,
+  GUO_DONG_ZHU,
 } from './wildMonsters';
 import type { ElementType } from '../types';
 
 describe('野生宝可梦数据', () => {
-  it('应该有24个野生宝可梦配置', () => {
-    expect(ALL_WILD_MONSTERS.length).toBe(24);
+  it('应该有28个野生宝可梦配置', () => {
+    expect(ALL_WILD_MONSTERS.length).toBe(28);
   });
 
   it('每个宝可梦都有名字', () => {
@@ -94,6 +98,24 @@ describe('野生宝可梦数据', () => {
   it('每个宝可梦都有至少一个偏好属性', () => {
     ALL_WILD_MONSTERS.forEach((config) => {
       expect(config.preferredElements.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('双属性宝可梦会把完整属性保存到 monster.elements', () => {
+    ALL_WILD_MONSTERS
+      .filter((config) => config.preferredElements.length === 2)
+      .forEach((config) => {
+        expect(config.monster.elements).toEqual(config.preferredElements);
+      });
+  });
+
+  it('19 种地点属性都至少有一只对应的野生宝可梦', () => {
+    const allElements: ElementType[] = [
+      'fire', 'water', 'grass', 'electric', 'normal', 'ice', 'fighting', 'poison', 'ground', 'flying',
+      'psychic', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy', 'light',
+    ];
+    allElements.forEach((element) => {
+      expect(getWildMonsterPool(element), `${element} 地点缺少对应野生宝可梦`).not.toHaveLength(0);
     });
   });
 });
@@ -193,7 +215,7 @@ describe('randomEncounter', () => {
   });
 });
 
-describe('24个宝可梦导出', () => {
+describe('28个宝可梦导出', () => {
   it('所有宝可梦常量都已导出', () => {
     expect(FEN_XIAN_PIG.name).toBe('粉仙猪');
     expect(YAN_ZONG_DOG.name).toBe('炎鬃犬');
@@ -219,5 +241,9 @@ describe('24个宝可梦导出', () => {
     expect(HEI_XIAN_PIG.name).toBe('黑仙猪');
     expect(LIE_GUANG_BIRD.name).toBe('烈光鸟');
     expect(LIE_GUANG_BIRD.element).toBe('light');
+    expect(JU_BING_CHONG).toMatchObject({ name: '剧冰虫', elements: ['ice', 'bug'] });
+    expect(TAI_YANG_DIE).toMatchObject({ name: '太阳碟', elements: ['fire', 'bug'] });
+    expect(DA_DI_FA_SHI).toMatchObject({ name: '大地法师', elements: ['ground', 'psychic'] });
+    expect(GUO_DONG_ZHU).toMatchObject({ name: '果冻猪', elements: ['water', 'psychic'] });
   });
 });

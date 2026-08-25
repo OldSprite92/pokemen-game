@@ -84,6 +84,7 @@ describe('奖励系统', () => {
       const reward = generateBattleReward(enemy);
 
       expect(reward.exp).toBeGreaterThan(0);
+      expect(reward.diamonds).toBeGreaterThan(0);
       expect(typeof reward.skillStone).toBe('boolean');
       expect(Array.isArray(reward.pokeballs)).toBe(true);
     });
@@ -114,6 +115,13 @@ describe('奖励系统', () => {
       expect(result.leveledUp).toBe(false);
     });
 
+    it('获得经验不会悄悄回满受伤伙伴', () => {
+      const monster = createTestMonster({ level: 1, hp: 21, maxHp: 50, exp: 0, expToNext: 100 });
+      const result = applyExp(monster, 10);
+      expect(result.monster.hp).toBe(21);
+      expect(result.monster.maxHp).toBe(50);
+    });
+
     it('经验足够时升级', () => {
       const monster = createTestMonster({ level: 1, exp: 0, expToNext: 20 });
       const result = applyExp(monster, 25);
@@ -142,6 +150,7 @@ describe('奖励系统', () => {
     it('包含经验值文本', () => {
       const reward = {
         exp: 50,
+        diamonds: 4,
         skillStone: false,
         pokeballs: [],
       };
@@ -152,6 +161,7 @@ describe('奖励系统', () => {
     it('有技能石时显示技能石文本', () => {
       const reward = {
         exp: 50,
+        diamonds: 4,
         skillStone: true,
         skillStoneElement: 'fire' as const,
         pokeballs: [],

@@ -25,10 +25,10 @@ export const ELEMENT_CONFIG: Record<string, { emoji: string; label: string; colo
 
 /** 任务要求中出现的属性列表（按顺序） */
 const AVAILABLE_ELEMENTS = [
-  'fire', 'water', 'grass', 'electric', 'ice',
-  'ground', 'flying', 'dark', 'psychic', 'poison',
-  'fighting', 'bug',
-];
+  'fire', 'water', 'grass', 'electric', 'normal', 'ice',
+  'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug',
+  'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy', 'light',
+] as ElementType[];
 
 interface StepElementProps {
   elements: ElementType[];

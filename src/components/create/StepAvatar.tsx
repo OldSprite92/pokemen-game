@@ -52,6 +52,11 @@ export const AVATAR_OPTIONS = [
   { id: 'snow', emoji: '❄️', color: '#3b82f6', bg: '#0c2d5e', label: '雪百纳' },
   { id: 'darkpig', emoji: '🐗', color: '#a855f7', bg: '#3b0764', label: '黑仙猪' },
   { id: 'lightbird', emoji: '✨', color: '#fbbf24', bg: '#451a03', label: '烈光鸟' },
+  { id: 'icebug', emoji: '🐛', color: '#67e8f9', bg: '#083344', label: '剧冰虫' },
+  { id: 'sunbutterfly', emoji: '🦋', color: '#fb923c', bg: '#450a0a', label: '太阳碟' },
+  // 临时占位：美术阶段将换为对应的手绘卡通角色贴图。
+  { id: 'earthmage', emoji: '🧙', color: '#d6a66b', bg: '#3f2a18', label: '大地法师' },
+  { id: 'jellypig', emoji: '🫧', color: '#7dd3fc', bg: '#164e63', label: '果冻猪' },
 ];
 
 export default function StepAvatar({ avatar, onChange }: StepAvatarProps) {

@@ -1,13 +1,16 @@
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../stores/gameStore';
 import { ELEMENT_CONFIG } from '../components/create/StepElement';
+import MonsterElementBadges from '../components/MonsterElementBadges';
 import { AVATAR_OPTIONS } from '../components/create/StepAvatar';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { db } from '../db/database';
 import { POKEBALL_CONFIG, tryCatch, getCatchResultText, getCatchRateHint, calculateCatchRate } from '../game/catchSystem';
 import { generateBattleReward, applyExp, generateRewardText } from '../game/rewardSystem';
-import { getSkillHint, createSignatureMoveName } from '../game/battleHints';
+import { addTrainerDiamonds } from '../game/trainerInventory';
+import { getSkillHint, getSkillRole } from '../game/battleHints';
 import { getBattleStatusConfig } from '../game/battleEngine';
+import { BattleAnimation, type BattleVisualState } from '../components/BattleAnimation';
 import {
   CHAPTER_TASKS,
   completeTask,
@@ -27,13 +30,15 @@ import {
   getMapDifficultyConfig,
   markDifficultyComplete,
   normalizeDifficulty,
+  saveDifficultyExploration,
 } from '../game/mapDifficulty';
-import type { Continent, PokeBallType, Monster } from '../types';
+import type { Continent, PokeBallType, Monster, Skill } from '../types';
 
 export default function BattlePage() {
   const navigate = useNavigate();
   const [isAnimating, setIsAnimating] = useState(false);
   const [showDamage, setShowDamage] = useState<{ value: number; side: 'player' | 'enemy' } | null>(null);
+  const [battleVisual, setBattleVisual] = useState<BattleVisualState | null>(null);
   const [showCatch, setShowCatch] = useState(false);
   const [catchResult, setCatchResult] = useState<{ success: boolean; text: string } | null>(null);
   const [showReward, setShowReward] = useState(false);
@@ -42,10 +47,25 @@ export default function BattlePage() {
   const [partnerEnergy, setPartnerEnergy] = useState(0);
   const [catchCard, setCatchCard] = useState<Monster | null>(null);
   const [catchBonusTexts, setCatchBonusTexts] = useState<string[]>([]);
+  const [showPartnerMoment, setShowPartnerMoment] = useState(false);
   const [inventory, setInventory] = useState<Record<PokeBallType, number>>({
     normal: 3, great: 1, ultra: 0, master: 0, legend: 0, transcend: 0,
   });
   const isAnimatingRef = useRef(false);
+
+  const playSkillAnimation = useCallback((attacker: 'player' | 'enemy', skill: Skill, result: { isMiss: boolean; effectiveness: number; isCritical: boolean; damage: number }) => {
+    const didHit = !result.isMiss && result.effectiveness > 0 && result.damage > 0;
+    setBattleVisual({ attacker, element: skill.element, skillName: skill.name, didHit, isCritical: result.isCritical });
+    window.setTimeout(() => setBattleVisual(null), 760);
+  }, []);
+
+  const showTurnDamage = useCallback((value: number, side: 'player' | 'enemy') => {
+    if (value <= 0) return;
+    window.setTimeout(() => {
+      setShowDamage({ value, side });
+      window.setTimeout(() => setShowDamage(null), 620);
+    }, 300);
+  }, []);
 
   const extendedBattleState = useGameStore((state) => state.extendedBattleState);
   const executePlayerTurn = useGameStore((state) => state.executePlayerTurn);
@@ -53,7 +73,9 @@ export default function BattlePage() {
   const checkBattleEnd = useGameStore((state) => state.checkBattleEnd);
   const endBattleExtended = useGameStore((state) => state.endBattleExtended);
   const switchPlayerMonster = useGameStore((state) => state.switchPlayerMonster);
+  const performPartnerAction = useGameStore((state) => state.performPartnerAction);
   const currentTrainer = useGameStore((state) => state.currentTrainer);
+  const currentAdventure = useGameStore((state) => state.currentAdventure);
 
   // 获取当前训练师的 localStorage key
   const getStorageKey = (key: string) => {
@@ -74,18 +96,21 @@ export default function BattlePage() {
     activePlayerIndex,
     playerStatuses,
     enemyStatuses,
+    enemyIntent,
   } = extendedBattleState;
 
   // 加载背包
   useEffect(() => {
     loadInventory();
-  }, []);
+  }, [currentTrainer?.id]);
 
   const loadInventory = async () => {
     // 使用训练师隔离的 key 加载背包
     const saved = localStorage.getItem(getStorageKey('pokeballs'));
     if (saved) {
       setInventory(JSON.parse(saved));
+    } else {
+      setInventory({ normal: 3, great: 1, ultra: 0, master: 0, legend: 0, transcend: 0 });
     }
   };
 
@@ -174,17 +199,25 @@ export default function BattlePage() {
       }
     }
 
-    useGameStore.getState().setCurrentAdventure({
+    const savedAdventure = {
       ...updatedAdventure,
       pendingBattleType: undefined,
-    });
+    };
+    useGameStore.getState().setCurrentAdventure(savedAdventure);
+    saveDifficultyExploration(continent.id, savedAdventure.difficulty, currentTrainer?.id, continent.cells, savedAdventure);
     return texts;
   };
 
   // 🐛 BUG-006 修复：更新遭遇记录状态
   const updateEncounterStatus = async (monsterName: string, captured: boolean, defeated: boolean) => {
     try {
-      const encounters = await db.encounters.where('monsterName').equals(monsterName).toArray();
+      const trainerId = currentTrainer?.id;
+      if (trainerId === undefined) return;
+      const encounters = await db.encounters
+        .where('trainerId')
+        .equals(trainerId)
+        .and((encounter) => encounter.monsterName === monsterName)
+        .toArray();
       if (encounters.length > 0) {
         // 更新最新的遭遇记录
         const latest = encounters.sort((a, b) => 
@@ -213,9 +246,9 @@ export default function BattlePage() {
       setIsAnimating(true);
       const timer = setTimeout(() => {
         const enemyResult = executeEnemyTurn();
-        if (enemyResult && enemyResult.damageResult.damage > 0) {
-          setShowDamage({ value: enemyResult.damageResult.damage, side: 'player' });
-          setTimeout(() => setShowDamage(null), 800);
+        if (enemyResult?.skill) {
+          playSkillAnimation('enemy', enemyResult.skill, enemyResult.damageResult);
+          showTurnDamage(enemyResult.damageResult.damage, 'player');
         }
         checkBattleEnd();
         isAnimatingRef.current = false;
@@ -227,7 +260,7 @@ export default function BattlePage() {
         setIsAnimating(false);
       };
     }
-  }, [turn, isOver, executeEnemyTurn, checkBattleEnd, showCatch, showReward]);
+  }, [turn, isOver, executeEnemyTurn, checkBattleEnd, showCatch, showReward, playSkillAnimation, showTurnDamage]);
 
   if (!playerMonster || !enemyMonster) return null;
 
@@ -238,43 +271,22 @@ export default function BattlePage() {
 
   const playerAvatar = AVATAR_OPTIONS.find((a) => a.id === playerMonster.avatar);
   const enemyAvatar = AVATAR_OPTIONS.find((a) => a.id === enemyMonster.avatar);
-  const playerElement = ELEMENT_CONFIG[playerMonster.element];
-  const enemyElement = ELEMENT_CONFIG[enemyMonster.element];
 
-  const handleSkillClick = useCallback(async (skillIndex: number, isSignature = false) => {
+  const handleSkillClick = useCallback(async (skillIndex: number) => {
     if (isAnimating || isOver || turn !== 'player') return;
 
     setIsAnimating(true);
 
-    const hint = getSkillHint(playerMonster.skills[skillIndex], playerMonster, enemyMonster);
     const result = executePlayerTurn(skillIndex);
-    if (result && result.damageResult.damage > 0) {
-      setShowDamage({ value: result.damageResult.damage, side: 'enemy' });
-      setTimeout(() => setShowDamage(null), 800);
+    if (result?.skill) {
+      playSkillAnimation('player', result.skill, result.damageResult);
+      showTurnDamage(result.damageResult.damage, 'enemy');
     } else if (result?.statusDamage) {
-      setShowDamage({ value: result.statusDamage, side: 'player' });
-      setTimeout(() => setShowDamage(null), 800);
+      showTurnDamage(result.statusDamage, 'player');
     }
 
-    if (result && isSignature) {
-      const bonusDamage = 15;
-      useGameStore.setState((s: any) => {
-        const nextHp = Math.max(0, s.extendedBattleState.enemyCurrentHp - bonusDamage);
-        return {
-          extendedBattleState: {
-            ...s.extendedBattleState,
-            enemyCurrentHp: nextHp,
-            turn: nextHp <= 0 ? s.extendedBattleState.turn : s.extendedBattleState.turn,
-            log: [
-              ...s.extendedBattleState.log,
-              `${createSignatureMoveName(playerMonster)}爆发伙伴能量，追加 ${bonusDamage} 点伤害！`,
-            ],
-          },
-        };
-      });
-      setPartnerEnergy(0);
-    } else if (result && (hint.level === 'recommended' || result.damageResult.effectiveness > 1)) {
-      setPartnerEnergy((value) => Math.min(2, value + 1));
+    if (result && result.damageResult.effectiveness > 1 && result.damageResult.damage > 0) {
+      setPartnerEnergy((value) => Math.min(3, value + 1));
     }
 
     const ended = checkBattleEnd();
@@ -285,12 +297,11 @@ export default function BattlePage() {
 
     setTimeout(() => {
       const enemyResult = executeEnemyTurn();
-      if (enemyResult && enemyResult.damageResult.damage > 0) {
-        setShowDamage({ value: enemyResult.damageResult.damage, side: 'player' });
-        setTimeout(() => setShowDamage(null), 800);
+      if (enemyResult?.skill) {
+        playSkillAnimation('enemy', enemyResult.skill, enemyResult.damageResult);
+        showTurnDamage(enemyResult.damageResult.damage, 'player');
       } else if (enemyResult?.statusDamage) {
-        setShowDamage({ value: enemyResult.statusDamage, side: 'enemy' });
-        setTimeout(() => setShowDamage(null), 800);
+        showTurnDamage(enemyResult.statusDamage, 'enemy');
       }
       const enemyEnded = checkBattleEnd();
       if (enemyEnded) {
@@ -299,10 +310,15 @@ export default function BattlePage() {
       setIsAnimating(false);
       isAnimatingRef.current = false;
     }, 1500);
-  }, [isAnimating, isOver, turn, executePlayerTurn, executeEnemyTurn, checkBattleEnd, playerMonster, enemyMonster]);
+  }, [isAnimating, isOver, turn, executePlayerTurn, executeEnemyTurn, checkBattleEnd, playerMonster, enemyMonster, playSkillAnimation, showTurnDamage]);
 
   const handleBattleEnd = async () => {
     const state = useGameStore.getState().extendedBattleState;
+    // Battle HP belongs to the expedition.  Persist it before rewards so a
+    // rest point on the map has a meaningful job after the battle.
+    await Promise.all(state.playerTeam
+      .filter((monster) => monster.id !== undefined)
+      .map((monster) => db.monsters.update(monster.id!, { hp: Math.max(0, monster.hp) })));
     if (state.winner === 'player' && enemyMonster) {
       // 🐛 BUG-006 修复：更新遭遇记录的击败状态
       updateEncounterStatus(enemyMonster.name, false, true);
@@ -313,16 +329,21 @@ export default function BattlePage() {
       const difficultyConfig = getMapDifficultyConfig(adventure?.difficulty);
       reward.exp = Math.floor(reward.exp * difficultyConfig.expMultiplier);
       const texts = generateRewardText(reward);
+      addTrainerDiamonds(reward.diamonds, currentTrainer?.id);
       if (difficultyConfig.id !== 'easy') {
         texts.push(`${difficultyConfig.emoji} ${difficultyConfig.label}难度奖励加成！`);
       }
 
       // 应用经验值
-      if (playerMonster) {
-        const { monster: updatedMonster, leveledUp } = applyExp(playerMonster, reward.exp);
+      const activeAtEnd = state.playerMonster ?? playerMonster;
+      if (activeAtEnd) {
+        const { monster: updatedMonster, leveledUp } = applyExp({
+          ...activeAtEnd,
+          hp: Math.max(1, state.playerCurrentHp),
+        }, reward.exp);
         // 保存更新后的宝可梦
-        if (playerMonster.id) {
-          db.monsters.update(playerMonster.id, {
+        if (activeAtEnd.id) {
+          db.monsters.update(activeAtEnd.id, {
             level: updatedMonster.level,
             exp: updatedMonster.exp,
             expToNext: updatedMonster.expToNext,
@@ -362,9 +383,9 @@ export default function BattlePage() {
       texts.unshift(...taskTexts);
       texts.unshift(...await completeDailyReward('battleWin'));
 
-      if (playerMonster) {
-        const signature = playerMonster.skills[0]?.name ?? '勇敢一击';
-        const diaryText = `${playerMonster.name}用${signature}帮助大家战胜了${enemyMonster.name}，离新的徽章又近了一步。`;
+      if (activeAtEnd) {
+        const signature = activeAtEnd.skills[0]?.name ?? '勇敢一击';
+        const diaryText = `${activeAtEnd.name}用${signature}帮助大家战胜了${enemyMonster.name}，离新的徽章又近了一步。`;
         await addDiaryEntry(diaryText, adventure?.continentId);
         texts.push('📔 新增一篇冒险日记！');
       }
@@ -400,10 +421,12 @@ export default function BattlePage() {
         const caughtMonster: Monster = {
           ...enemyMonster,
           id: undefined,
+          trainerId: currentTrainer?.id,
           createdBy: 'user',
           createdAt: new Date(),
           hp: enemyMonster.maxHp || enemyMonster.hp,
         };
+        if (!currentTrainer?.id) return;
         db.monsters.add(caughtMonster).then((id) => {
           // 关联到训练师
           const trainer = useGameStore.getState().currentTrainer;
@@ -438,12 +461,11 @@ export default function BattlePage() {
         setTimeout(() => {
           setCatchResult(null);
           const enemyResult = executeEnemyTurn();
-        if (enemyResult && enemyResult.damageResult.damage > 0) {
-          setShowDamage({ value: enemyResult.damageResult.damage, side: 'player' });
-          setTimeout(() => setShowDamage(null), 800);
+        if (enemyResult?.skill) {
+          playSkillAnimation('enemy', enemyResult.skill, enemyResult.damageResult);
+          showTurnDamage(enemyResult.damageResult.damage, 'player');
         } else if (enemyResult?.statusDamage) {
-          setShowDamage({ value: enemyResult.statusDamage, side: 'enemy' });
-          setTimeout(() => setShowDamage(null), 800);
+          showTurnDamage(enemyResult.statusDamage, 'enemy');
         }
           checkBattleEnd();
           setIsAnimating(false);
@@ -476,6 +498,51 @@ export default function BattlePage() {
     return getCatchRateHint(rate);
   };
 
+  const handlePartnerAction = (kind: 'burst' | 'interrupt' | 'rescue') => {
+    if (isAnimating || isOver || turn !== 'player' || partnerEnergy < 3) return;
+    setIsAnimating(true);
+    const result = performPartnerAction(kind);
+    if (!result) {
+      setIsAnimating(false);
+      return;
+    }
+    setPartnerEnergy(0);
+    showTurnDamage(result.damageResult.damage, 'enemy');
+    if (checkBattleEnd()) {
+      handleBattleEnd();
+      return;
+    }
+    setTimeout(() => {
+      const enemyResult = executeEnemyTurn();
+      if (enemyResult?.skill) {
+        playSkillAnimation('enemy', enemyResult.skill, enemyResult.damageResult);
+        showTurnDamage(enemyResult.damageResult.damage, 'player');
+      }
+      if (checkBattleEnd()) handleBattleEnd();
+      setIsAnimating(false);
+      isAnimatingRef.current = false;
+    }, 900);
+  };
+
+  const finishPartnerMoment = (kind: 'chat' | 'practice' | 'snack' | 'photo') => {
+    const momentText = {
+      chat: `${playerMonster.name}认真听完了你的悄悄话。`,
+      practice: `${playerMonster.name}和你一起练习了刚才的招式。`,
+      snack: `${playerMonster.name}开心地吃完了奖励点心。`,
+      photo: `你和${playerMonster.name}留下了一张冒险照片。`,
+    }[kind];
+    const adventure = useGameStore.getState().currentAdventure;
+    if (adventure) {
+      useGameStore.getState().setCurrentAdventure({
+        ...adventure,
+        bondPoints: Math.min(3, (adventure.bondPoints ?? 0) + 1),
+      });
+      addDiaryEntry(momentText, adventure.continentId);
+    }
+    setShowPartnerMoment(false);
+    handleEndBattle();
+  };
+
   const renderStatuses = (statuses: typeof playerStatuses) => {
     if (statuses.length === 0) return null;
     return (
@@ -488,7 +555,7 @@ export default function BattlePage() {
               className="rounded-lg border border-yellow-400/30 bg-yellow-500/10 px-2 py-0.5 text-xs font-bold text-yellow-100"
               title={config.description}
             >
-              {config.emoji} {config.name} {status.turnsRemaining}
+              {config.emoji} {config.name}：还剩 {status.turnsRemaining} 回合
             </span>
           );
         })}
@@ -499,7 +566,7 @@ export default function BattlePage() {
   return (
     <div className="battle-page flex flex-col min-h-[100dvh] p-4 gap-4">
       {/* 顶部 */}
-      <div className="flex items-center justify-between">
+      <div className="page-topbar sticky top-0 z-40 flex items-center justify-between">
         <button onClick={handleEndBattle} className="text-blue-400 hover:text-blue-300 text-lg font-bold">
           ← 逃跑
         </button>
@@ -509,10 +576,11 @@ export default function BattlePage() {
 
       {/* 战斗区域 */}
       <div className="battle-layout flex-1 flex flex-col gap-6 min-h-0">
-        <div className="battle-field">
+        <div className="battle-field relative">
+        <BattleAnimation visual={battleVisual} />
         {/* 敌方宝可梦 */}
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 rounded-xl flex items-center justify-center text-3xl relative" style={{ backgroundColor: enemyAvatar?.bg || '#1f2937' }}>
+          <div className={`battle-monster-avatar battle-monster-avatar-enemy w-16 h-16 rounded-xl flex items-center justify-center text-3xl relative ${battleVisual?.attacker === 'enemy' ? 'is-attacking' : battleVisual?.attacker === 'player' ? (battleVisual.didHit ? 'is-hit' : 'is-dodging') : ''}`} style={{ backgroundColor: enemyAvatar?.bg || '#1f2937' }}>
             {enemyAvatar?.emoji || '❓'}
             {showDamage?.side === 'enemy' && (
               <div className="absolute -top-2 -right-2 bg-red-500 text-white text-sm font-bold px-2 py-1 rounded-lg animate-bounce">
@@ -521,17 +589,28 @@ export default function BattlePage() {
             )}
           </div>
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
               <span className="text-lg font-bold text-white">{enemyMonster.name}</span>
-              <span className="text-sm" style={{ color: enemyElement?.color }}>
-                {enemyElement?.emoji} Lv.{enemyMonster.level}
-              </span>
+              <MonsterElementBadges monster={enemyMonster} badgeClassName="text-sm font-bold" />
+              <span className="text-sm text-gray-300">Lv.{enemyMonster.level}</span>
             </div>
             <div className="h-4 bg-gray-700 rounded-full overflow-hidden">
               <div className="h-full rounded-full transition-all duration-500" style={{ width: `${enemyHpPercent}%`, backgroundColor: hpBarColor(enemyHpPercent) }} />
             </div>
             <p className="text-xs text-gray-400 mt-1">{enemyCurrentHp} / {enemyMaxHp} HP</p>
             {renderStatuses(enemyStatuses)}
+            {enemyIntent && !isOver && (
+              <div className="mt-2 rounded-lg border border-purple-400/40 bg-purple-500/10 px-3 py-2 text-xs">
+                <p className="font-bold text-purple-100">{enemyIntent.emoji} 敌方意图：{enemyIntent.label}</p>
+                <p className="mt-0.5 text-purple-200/80">{enemyIntent.description}</p>
+              </div>
+            )}
+            {currentAdventure?.pendingBattleType === 'boss' && (currentAdventure.bossHints?.length ?? 0) > 0 && (
+              <div className="mt-2 rounded-lg border border-yellow-400/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-100">
+                <p className="font-bold">🧭 你在地图上发现的线索</p>
+                {currentAdventure.bossHints?.slice(-2).map((hint) => <p key={hint} className="mt-0.5">• {hint}</p>)}
+              </div>
+            )}
           </div>
         </div>
 
@@ -551,7 +630,7 @@ export default function BattlePage() {
 
         {/* 我方宝可梦 */}
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 rounded-xl flex items-center justify-center text-3xl relative" style={{ backgroundColor: playerAvatar?.bg || '#1f2937' }}>
+          <div className={`battle-monster-avatar battle-monster-avatar-player w-16 h-16 rounded-xl flex items-center justify-center text-3xl relative ${battleVisual?.attacker === 'player' ? 'is-attacking' : battleVisual?.attacker === 'enemy' ? (battleVisual.didHit ? 'is-hit' : 'is-dodging') : ''}`} style={{ backgroundColor: playerAvatar?.bg || '#1f2937' }}>
             {playerAvatar?.emoji || '❓'}
             {showDamage?.side === 'player' && (
               <div className="absolute -top-2 -right-2 bg-red-500 text-white text-sm font-bold px-2 py-1 rounded-lg animate-bounce">
@@ -560,11 +639,10 @@ export default function BattlePage() {
             )}
           </div>
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
               <span className="text-lg font-bold text-white">{playerMonster.name}</span>
-              <span className="text-sm" style={{ color: playerElement?.color }}>
-                {playerElement?.emoji} Lv.{playerMonster.level}
-              </span>
+              <MonsterElementBadges monster={playerMonster} badgeClassName="text-sm font-bold" />
+              <span className="text-sm text-gray-300">Lv.{playerMonster.level}</span>
             </div>
             <div className="h-4 bg-gray-700 rounded-full overflow-hidden">
               <div className="h-full rounded-full transition-all duration-500" style={{ width: `${playerHpPercent}%`, backgroundColor: hpBarColor(playerHpPercent) }} />
@@ -597,6 +675,7 @@ export default function BattlePage() {
             <div className="battle-skill-grid grid grid-cols-2 gap-3">
               {playerMonster.skills.map((skill, index) => {
                 const skillElement = ELEMENT_CONFIG[skill.element];
+                const role = getSkillRole(skill);
                 const isDisabled = isAnimating || turn !== 'player';
                 return (
                   <button
@@ -610,12 +689,13 @@ export default function BattlePage() {
                     {(() => {
                       const hint = getSkillHint(skill, playerMonster, enemyMonster);
                       return (
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${hint.colorClass}`}>
+                        <span className={`max-w-full text-center text-xs px-2 py-0.5 rounded-full border ${hint.colorClass}`}>
                           {hint.label} · {hint.reason}
                         </span>
                       );
                     })()}
                     <span className="text-lg font-bold">{skillElement?.emoji} {skill.name}</span>
+                    <span className="text-xs text-blue-200">{role.label} · {role.description}</span>
                     <span className="text-xs text-gray-400">威力 {skill.power} | 命中 {skill.accuracy}%</span>
                   </button>
                 );
@@ -624,22 +704,16 @@ export default function BattlePage() {
 
             <div className="rounded-xl bg-yellow-500/10 border border-yellow-400/30 p-3 text-center">
               <p className="text-sm text-yellow-200 font-bold">
-                伙伴能量 {partnerEnergy}/2
+                伙伴能量 {partnerEnergy}/3
               </p>
-              {partnerEnergy >= 2 ? (
-                <button
-                  onClick={() => {
-                    const bestIndex = playerMonster.skills.reduce((best, skill, index, all) =>
-                      skill.power > all[best].power ? index : best, 0);
-                    handleSkillClick(bestIndex, true);
-                  }}
-                  disabled={isAnimating || turn !== 'player'}
-                  className="mt-2 w-full bg-yellow-500 text-gray-900 py-2 rounded-xl font-bold hover:bg-yellow-400 active:scale-95 transition-all"
-                >
-                  ✨ {createSignatureMoveName(playerMonster)}
-                </button>
+              {partnerEnergy >= 3 ? (
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <button onClick={() => handlePartnerAction('burst')} disabled={isAnimating || turn !== 'player'} className="rounded-xl bg-yellow-500 px-2 py-2 text-xs font-bold text-gray-900 hover:bg-yellow-400 disabled:opacity-50">✨ 爆发</button>
+                  <button onClick={() => handlePartnerAction('interrupt')} disabled={isAnimating || turn !== 'player'} className="rounded-xl bg-orange-500 px-2 py-2 text-xs font-bold text-white hover:bg-orange-400 disabled:opacity-50">🛑 打断</button>
+                  <button onClick={() => handlePartnerAction('rescue')} disabled={isAnimating || turn !== 'player'} className="rounded-xl bg-pink-500 px-2 py-2 text-xs font-bold text-white hover:bg-pink-400 disabled:opacity-50">💞 救援</button>
+                </div>
               ) : (
-                <p className="text-xs text-gray-400 mt-1">使用推荐技能或打出克制，就能点亮大招。</p>
+                <p className="text-xs text-gray-400 mt-1">打出克制、破盾或打断蓄力，才能点亮大招。</p>
               )}
             </div>
 
@@ -715,7 +789,6 @@ export default function BattlePage() {
                 const isActive = index === activePlayerIndex;
                 const isFatigued = monster.fatigueEndTime && new Date() < monster.fatigueEndTime;
                 const avatar = AVATAR_OPTIONS.find((a) => a.id === monster.avatar);
-                const element = ELEMENT_CONFIG[monster.element];
                 const hpPercent = Math.max(0, ((monster.maxHp ? monster.hp : monster.hp) / (monster.maxHp || monster.hp)) * 100);
 
                 return (
@@ -743,9 +816,10 @@ export default function BattlePage() {
                         {isFatigued && '(疲劳中)'}
                         {monster.hp <= 0 && '(需要休息)'}
                       </p>
-                      <p className="text-xs text-gray-400">
-                        {element?.emoji} Lv.{monster.level} | HP: {monster.hp}/{monster.maxHp || monster.hp}
-                      </p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                        <MonsterElementBadges monster={monster} badgeClassName="text-xs font-bold" />
+                        <span className="text-xs text-gray-400">Lv.{monster.level} | HP: {monster.hp}/{monster.maxHp || monster.hp}</span>
+                      </div>
                       <div className="h-2 bg-gray-600 rounded-full mt-1 overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all"
@@ -782,11 +856,28 @@ export default function BattlePage() {
               ))}
             </div>
             <button
-              onClick={() => { setShowReward(false); handleEndBattle(); }}
+              onClick={() => { setShowReward(false); setShowPartnerMoment(true); }}
               className="bg-green-500 text-white px-8 py-3 rounded-xl font-bold text-lg hover:bg-green-400 active:scale-95 transition-all"
             >
               ✅ 收下奖励，继续冒险
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 战后伙伴互动：每次结算只选一次，奖励叙事与默契而非数值。 */}
+      {showPartnerMoment && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+          <div className="pixel-border rounded-2xl p-6 bg-gray-800 max-w-sm w-full text-center">
+            <div className="text-5xl mb-3">💞</div>
+            <h3 className="text-xl font-bold text-pink-200 mb-2">和{playerMonster.name}做件小事</h3>
+            <p className="text-sm text-gray-300 mb-4">选一个小互动，默契 +1。</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => finishPartnerMoment('chat')} className="rounded-xl bg-pink-500 px-3 py-3 font-bold text-white hover:bg-pink-400">💬 聊聊天</button>
+              <button onClick={() => finishPartnerMoment('practice')} className="rounded-xl bg-blue-500 px-3 py-3 font-bold text-white hover:bg-blue-400">🎯 练习</button>
+              <button onClick={() => finishPartnerMoment('snack')} className="rounded-xl bg-orange-500 px-3 py-3 font-bold text-white hover:bg-orange-400">🍪 吃点心</button>
+              <button onClick={() => finishPartnerMoment('photo')} className="rounded-xl bg-purple-500 px-3 py-3 font-bold text-white hover:bg-purple-400">📸 拍张照</button>
+            </div>
           </div>
         </div>
       )}

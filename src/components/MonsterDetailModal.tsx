@@ -1,5 +1,6 @@
 import { AVATAR_OPTIONS } from './create/StepAvatar';
 import { ELEMENT_CONFIG } from './create/StepElement';
+import MonsterElementBadges from './MonsterElementBadges';
 import { generateMonsterBackstory } from '../game/monsterStory';
 import type { ElementType, Monster } from '../types';
 
@@ -173,16 +174,8 @@ export default function MonsterDetailModal({
               </div>
               <h2 className="text-2xl font-bold text-white mb-1">{monster.name}</h2>
               <p className="text-sm text-gray-400 mb-2">{getSpecies(monster)}</p>
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-xs px-3 py-1 rounded-full font-bold"
-                  style={{
-                    backgroundColor: getElementColor(monster.element) + '30',
-                    color: getElementColor(monster.element),
-                  }}
-                >
-                  {getElementEmoji(monster.element)} {ELEMENT_CONFIG[monster.element]?.label}
-                </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <MonsterElementBadges monster={monster} badgeClassName="text-xs px-3 py-1 rounded-full font-bold" />
                 <span className="text-xs px-3 py-1 rounded-full bg-gray-700 text-gray-300 font-bold">
                   Lv.{monster.level}
                 </span>

@@ -28,7 +28,11 @@ export interface BattleStatus {
 /** 宝可梦（怪物） */
 export interface Monster {
   id?: number;
+  /** Belongs to one trainer only. Records without this value are legacy shared data. */
+  trainerId?: number;
   name: string;
+  /** 全部属性；element 保留为主属性，兼容已有存档和战斗计算。 */
+  elements?: ElementType[];
   element: ElementType;
   skills: Skill[];
   avatar: string;
@@ -97,7 +101,7 @@ export interface Trainer {
 // ============ 冒险相关类型 ============
 
 /** 格子类型 */
-export type CellType = 'start' | 'empty' | 'wild' | 'treasure' | 'rest' | 'boss' | 'blocked';
+export type CellType = 'start' | 'empty' | 'wild' | 'treasure' | 'rest' | 'gym' | 'boss' | 'blocked';
 
 /** 地图难度 */
 export type MapDifficulty = 'easy' | 'hard' | 'hell';
@@ -133,24 +137,72 @@ export interface AdventureEvent {
   type: 'battle' | 'item' | 'story' | 'npc' | 'rest';
   description: string;
   completed: boolean;
-  reward?: { exp?: number; hp?: number };
+  reward?: { exp?: number; hp?: number; diamonds?: number };
   cellType?: CellType;
   parentPrompt?: string;
+  mapPosition?: { x: number; y: number };
+  choices?: AdventureEventChoice[];
+}
+
+/** A short, consequence-bearing map choice. */
+export interface AdventureEventChoice {
+  id: string;
+  label: string;
+  outcome: string;
+  bondDelta?: number;
+  bossHint?: string;
 }
 
 /** 冒险记录 */
 export interface Adventure {
   id?: number;
+  /** Keeps unfinished maps from appearing in another trainer's session. */
+  trainerId?: number;
   continentId: string;
   difficulty?: MapDifficulty;
+  /** 本次进入地图时从仓库带出的远征小队；孩子可自由决定人数。 */
+  mapPartyIds?: number[];
   currentPosition: { x: number; y: number };
   events: AdventureEvent[];
   chapterGoalId?: string;
   taskIds?: string[];
   completedTaskIds?: string[];
   storyFragmentIds?: string[];
-  pendingBattleType?: 'wild' | 'boss';
+  pendingBattleType?: 'wild' | 'gym' | 'boss';
+  /** Lightweight relationship progress earned from caring choices and smart battles. */
+  bondPoints?: number;
+  /** Short tactical clues found on the map and shown before a Boss battle. */
+  bossHints?: string[];
+  /** 当前地图的道馆许可与挑战书状态，按训练师的冒险存档保存。 */
+  gymProgress?: GymProgress;
   completedAt?: Date;
+}
+
+/** 道馆单次挑战的随机赛制；规则由馆主公布，玩家只负责配队。 */
+export type GymBattleFormat = 1 | 2 | 3;
+export type GymSwitchRule = 'solo' | 'free' | 'locked';
+
+export interface GymChallenge {
+  format: GymBattleFormat;
+  switchRule: GymSwitchRule;
+  opponentIds: string[];
+  playerIds: number[];
+  createdAt: Date;
+}
+
+export interface GymRosterMember {
+  id: string;
+  monster: Monster;
+}
+
+/** 每个训练师在一张地图上的道馆进度。 */
+export interface GymProgress {
+  continentId: string;
+  cleared: boolean;
+  challenge?: GymChallenge;
+  attempts: number;
+  roster: GymRosterMember[];
+  lastResult?: 'win' | 'loss';
 }
 
 /** 徽章 */
@@ -162,6 +214,11 @@ export interface Badge {
   name: string;
   emoji: string;
   earnedAt: Date;
+  /** 道馆徽章的来源属性与分配状态；旧 Boss 徽章不填写。 */
+  element?: ElementType;
+  kind?: 'boss' | 'gym';
+  assignedMonsterId?: number;
+  statBoost?: 'hp' | 'attack' | 'defense' | 'speed';
 }
 
 /** 贴纸 */
@@ -188,7 +245,11 @@ export interface AdventureDiaryEntry {
 /** 遭遇记录 */
 export interface EncounterRecord {
   id?: number;
+  /** The trainer who met this monster. */
+  trainerId?: number;
   monsterName: string;
+  /** 完整属性列表；monsterElement 保留为主属性，兼容旧遭遇记录。 */
+  monsterElements?: ElementType[];
   monsterElement: ElementType;
   monsterLevel: number;
   monsterAvatar: string;

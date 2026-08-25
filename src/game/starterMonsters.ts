@@ -21,6 +21,7 @@ export function createSkill(
 /** 苦力猪 - 地面+闪电属性 */
 export const KULI_PIG: Monster = {
   name: '苦力猪',
+  elements: ['ground', 'electric'],
   element: 'ground', // 主属性地面
   skills: [
     createSkill('泥石流冲锋', 'ground', 25, 90, '卷起泥石流冲向敌人'),
@@ -42,6 +43,7 @@ export const KULI_PIG: Monster = {
 /** 洞居蟹 - 格斗+水属性 */
 export const CAVE_CRAB: Monster = {
   name: '洞居蟹',
+  elements: ['fighting', 'water'],
   element: 'fighting', // 主属性格斗
   skills: [
     createSkill('水流冲击', 'water', 25, 90, '用高压水流冲击敌人'),
@@ -63,6 +65,7 @@ export const CAVE_CRAB: Monster = {
 /** 萤菇蛙 - 草+毒属性 */
 export const GLOW_FROG: Monster = {
   name: '萤菇蛙',
+  elements: ['grass', 'poison'],
   element: 'grass', // 主属性草
   skills: [
     createSkill('喷射毒液', 'poison', 25, 90, '喷射剧毒液体攻击敌人'),
@@ -91,20 +94,17 @@ export const STARTER_CONFIG = [
     emoji: '🐷',
     bgColor: '#92400e',
     description: '皮糙肉厚的苦力猪，擅长地面和闪电技能',
-    secondaryElement: 'electric' as ElementType,
   },
   {
     monster: CAVE_CRAB,
     emoji: '🦀',
     bgColor: '#dc2626',
     description: '坚硬外壳的洞居蟹，格斗和水属性兼备',
-    secondaryElement: 'water' as ElementType,
   },
   {
     monster: GLOW_FROG,
     emoji: '🐸',
     bgColor: '#22c55e',
     description: '神秘的萤菇蛙，草毒双属性的小精灵',
-    secondaryElement: 'poison' as ElementType,
   },
 ];

@@ -1,5 +1,14 @@
 apply plugin: 'com.android.application'
 
+def versionProperties = new Properties()
+def versionPropertiesFile = rootProject.file('version.properties')
+if (!versionPropertiesFile.exists()) {
+    throw new GradleException('Missing android/version.properties')
+}
+versionProperties.load(new FileInputStream(versionPropertiesFile))
+def appVersionCode = versionProperties.getProperty('VERSION_CODE', '1').toInteger()
+def appVersionName = versionProperties.getProperty('VERSION_NAME', '1.0.0')
+
 android {
     namespace = "com.pokemon.adventure"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +16,8 @@ android {
         applicationId "com.pokemon.adventure"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -21,6 +30,12 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+android.applicationVariants.all { variant ->
+    variant.outputs.all { output ->
+        output.outputFileName = "pokemon-adventure-v${appVersionName}-${variant.buildType.name}.apk"
     }
 }
 

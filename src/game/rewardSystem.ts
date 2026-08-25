@@ -5,6 +5,7 @@ import { learnNewSkill, checkSkillUnlock, getSkillCountByLevel } from './skillPo
 /** 战斗胜利奖励结果 */
 export interface BattleReward {
   exp: number;
+  diamonds: number;
   skillStone: boolean;
   skillStoneElement?: ElementType;
   pokeballs: { type: PokeBallType; count: number }[];
@@ -23,8 +24,9 @@ export function generateSkillStone(): { element: ElementType } | null {
   if (Math.random() > 0.3) return null;
 
   const elements: ElementType[] = [
-    'fire', 'water', 'grass', 'electric', 'ice',
-    'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug', 'dark',
+    'fire', 'water', 'grass', 'electric', 'normal', 'ice', 'fighting',
+    'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost',
+    'dragon', 'dark', 'steel', 'fairy', 'light',
   ];
   const element = elements[Math.floor(Math.random() * elements.length)];
   return { element };
@@ -70,6 +72,7 @@ export function generateBattleReward(enemy: Monster): BattleReward {
 
   return {
     exp,
+    diamonds: 2 + Math.floor(enemy.level / 2) + Math.floor(Math.random() * 3),
     skillStone: skillStoneResult !== null,
     skillStoneElement: skillStoneResult?.element,
     pokeballs,
@@ -83,6 +86,7 @@ export function generateRandomSkill(element: ElementType): Skill {
     water: ['水枪', '水流冲击', '海啸', '冰冻之泪'],
     grass: ['藤蔓缠绕', '种子炸弹', '光合作用', '毒粉'],
     electric: ['电击', '十万伏特', '雷电拳', '静电场'],
+    normal: ['撞击', '抓挠', '猛撞', '星星冲击'],
     ice: ['冰冻光束', '暴风雪', '冰锥', '霜冻'],
     fighting: ['空手劈', '飞踢', '气功波', '重拳'],
     poison: ['毒液', '腐蚀气体', '剧毒', '酸雨'],
@@ -90,7 +94,13 @@ export function generateRandomSkill(element: ElementType): Skill {
     flying: ['翅膀攻击', '空气斩', '旋风', '俯冲'],
     psychic: ['念力', '精神强念', '预知未来', '催眠术'],
     bug: ['虫咬', '丝线缠绕', '毒针', '鳞粉'],
+    rock: ['落石', '岩石封锁', '岩崩', '石刃'],
+    ghost: ['暗影爪', '惊吓', '暗影球', '诅咒'],
+    dragon: ['龙爪', '龙之怒', '龙息', '龙星群'],
     dark: ['暗影爪', '恶之波动', '偷袭', '欺诈'],
+    steel: ['金属爪', '铁头', '钢翼', '钢铁冲击'],
+    fairy: ['妖精之风', '星光魔法', '月亮之力', '治愈之愿'],
+    light: ['闪光', '光束冲击', '阳光烈焰', '圣光守护'],
   };
 
   const names = skillNames[element] || ['神秘攻击'];
@@ -112,7 +122,12 @@ export function generateRandomSkill(element: ElementType): Skill {
 export function applyExp(monster: Monster, exp: number): { monster: Monster; leveledUp: boolean; newSkills?: Skill[] } {
   let newExp = monster.exp + exp;
   let newLevel = monster.level;
-  let newHp = monster.maxHp || monster.hp;
+  const originalMaxHp = monster.maxHp || monster.hp;
+  let newHp = originalMaxHp;
+  // Experience should not quietly erase all battle damage.  A level-up grants
+  // the newly earned maximum-HP portion, while camps remain the reliable way
+  // to heal an expedition party.
+  let currentHp = Math.min(monster.hp, originalMaxHp);
   let newAttack = monster.attack;
   let newDefense = monster.defense;
   let newSpeed = monster.speed;
@@ -129,7 +144,9 @@ export function applyExp(monster: Monster, exp: number): { monster: Monster; lev
     leveledUp = true;
 
     // 升级属性提升
-    newHp += 3 + Math.floor(Math.random() * 3);
+    const hpGain = 3 + Math.floor(Math.random() * 3);
+    newHp += hpGain;
+    currentHp += hpGain;
     newAttack += 2 + Math.floor(Math.random() * 3);
     newDefense += 2 + Math.floor(Math.random() * 3);
     newSpeed += 2 + Math.floor(Math.random() * 3);
@@ -164,7 +181,7 @@ export function applyExp(monster: Monster, exp: number): { monster: Monster; lev
       exp: newExp,
       expToNext,
       maxHp: newHp,
-      hp: newHp, // 升级回满血
+      hp: Math.min(newHp, currentHp),
       attack: newAttack,
       defense: newDefense,
       speed: newSpeed,
@@ -179,6 +196,7 @@ export function applyExp(monster: Monster, exp: number): { monster: Monster; lev
 export function generateRewardText(reward: BattleReward): string[] {
   const texts: string[] = [];
   texts.push(`获得 ${reward.exp} 经验值！`);
+  texts.push(`获得 💎 ${reward.diamonds} 枚钻石！`);
 
   if (reward.skillStone) {
     texts.push(`获得技能石！💎`);

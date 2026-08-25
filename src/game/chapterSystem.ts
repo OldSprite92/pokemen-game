@@ -101,6 +101,30 @@ const CHAPTERS: Record<string, ChapterConfig> = {
       '集齐三段森林悄悄话，就能获得丛林徽章。',
     ],
   },
+  'poison-swamp': {
+    goalId: 'poison-swamp-badge',
+    goalText: '收集净化露珠，驱散沼泽中的毒雾',
+    bossIntro: '毒雾女王守在沼泽深处，它想看看你是否会照顾好伙伴。',
+    badgeName: '净雾徽章',
+    badgeEmoji: '☠️',
+    storyFragments: [
+      '沼泽的紫色雾气会在月光下变成小小的星点。',
+      '只有互相提醒的伙伴，才不会在湿地里迷路。',
+      '三颗露珠汇在一起，就能照亮净雾徽章。',
+    ],
+  },
+  'normal-meadow': {
+    goalId: 'normal-meadow-badge',
+    goalText: '找到原野的四叶星，守护宁静的家园',
+    bossIntro: '原野守护者在风车旁等待，它最欣赏会观察细节的训练师。',
+    badgeName: '原野徽章',
+    badgeEmoji: '⭐',
+    storyFragments: [
+      '星星原野的风会把悄悄话送到每一朵花身边。',
+      '普通的石头下面，也许正藏着一个温暖的惊喜。',
+      '集齐三颗四叶星，就能点亮原野徽章。',
+    ],
+  },
 };
 
 const ELEMENT_STICKERS: Record<ElementType, { emoji: string; name: string }> = {

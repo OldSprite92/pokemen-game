@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import PokedexPage from '../pages/PokedexPage';
 import { db } from '../db/database';
+import { useGameStore } from '../stores/gameStore';
 import type { Monster, EncounterRecord } from '../types';
 
 // Mock window.confirm
@@ -15,6 +16,18 @@ describe('图鉴页面', () => {
   beforeEach(async () => {
     await db.monsters.clear();
     await db.encounters.clear();
+    await db.badges.clear();
+    await db.stickers.clear();
+    await db.diaryEntries.clear();
+    useGameStore.setState({
+      currentTrainer: {
+        id: 1,
+        name: '测试训练师',
+        avatar: 'boy',
+        monsterIds: [],
+        createdAt: new Date(),
+      },
+    });
   });
 
   it('加载状态显示', () => {
@@ -28,7 +41,7 @@ describe('图鉴页面', () => {
 
   it('空状态显示创造按钮', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/warehouse']}>
         <PokedexPage />
       </MemoryRouter>
     );
@@ -45,6 +58,7 @@ describe('图鉴页面', () => {
   it('显示已拥有的宝可梦列表', async () => {
     const monster: Monster = {
       id: 1,
+      trainerId: 1,
       name: '火焰龙',
       element: 'fire',
       skills: [
@@ -64,7 +78,7 @@ describe('图鉴页面', () => {
     await db.monsters.add(monster);
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/warehouse']}>
         <PokedexPage />
       </MemoryRouter>
     );
@@ -77,9 +91,49 @@ describe('图鉴页面', () => {
     expect(screen.getByText('火焰拳')).toBeInTheDocument();
   });
 
+  it('只显示当前训练师的伙伴和遭遇记录', async () => {
+    await db.monsters.bulkAdd([
+      {
+        name: '我的小火龙', trainerId: 1, element: 'fire', skills: [], avatar: 'dragon',
+        hp: 80, attack: 60, defense: 50, speed: 60, level: 3, exp: 0,
+        createdBy: 'user', createdAt: new Date(),
+      },
+      {
+        name: '别人的水精灵', trainerId: 2, element: 'water', skills: [], avatar: 'fish',
+        hp: 80, attack: 60, defense: 50, speed: 60, level: 3, exp: 0,
+        createdBy: 'user', createdAt: new Date(),
+      },
+    ]);
+    await db.encounters.bulkAdd([
+      {
+        trainerId: 1, monsterName: '我遇见的伙伴', monsterElement: 'fire', monsterLevel: 2,
+        monsterAvatar: 'dragon', continentName: '火山岛', encounteredAt: new Date(), captured: false, defeated: false,
+      },
+      {
+        trainerId: 2, monsterName: '别人的遭遇', monsterElement: 'water', monsterLevel: 2,
+        monsterAvatar: 'fish', continentName: '冰原岛', encounteredAt: new Date(), captured: false, defeated: false,
+      },
+    ]);
+
+    const warehouseView = render(
+      <MemoryRouter initialEntries={['/warehouse']}>
+        <PokedexPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(screen.getByText('我的小火龙')).toBeInTheDocument());
+    expect(screen.queryByText('别人的水精灵')).not.toBeInTheDocument();
+
+    warehouseView.unmount();
+    render(<MemoryRouter><PokedexPage /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByText('我遇见的伙伴')).toBeInTheDocument());
+    expect(screen.queryByText('别人的遭遇')).not.toBeInTheDocument();
+  });
+
   it('点击宝可梦卡片显示详情弹窗', async () => {
     const monster: Monster = {
       id: 1,
+      trainerId: 1,
       name: '火焰龙',
       element: 'fire',
       skills: [
@@ -99,7 +153,7 @@ describe('图鉴页面', () => {
     await db.monsters.add(monster);
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/warehouse']}>
         <PokedexPage />
       </MemoryRouter>
     );
@@ -126,6 +180,7 @@ describe('图鉴页面', () => {
   it('切换标签显示遭遇记录', async () => {
     const encounter: EncounterRecord = {
       id: 1,
+      trainerId: 1,
       monsterName: '水精灵',
       monsterElement: 'water',
       monsterLevel: 3,
@@ -144,12 +199,6 @@ describe('图鉴页面', () => {
       </MemoryRouter>
     );
 
-    // 切换到遭遇记录标签
-    await waitFor(() => {
-      const encounterTab = screen.getByText(/遭遇记录/);
-      fireEvent.click(encounterTab);
-    });
-
     await waitFor(() => {
       expect(screen.getByText('水精灵')).toBeInTheDocument();
     });
@@ -164,12 +213,6 @@ describe('图鉴页面', () => {
       </MemoryRouter>
     );
 
-    // 切换到遭遇记录标签
-    await waitFor(() => {
-      const encounterTab = screen.getByText(/遭遇记录/);
-      fireEvent.click(encounterTab);
-    });
-
     await waitFor(() => {
       expect(screen.getByText('还没有遭遇记录')).toBeInTheDocument();
     });
@@ -182,6 +225,7 @@ describe('图鉴页面', () => {
   it('技能管理按钮打开技能详情', async () => {
     const monster: Monster = {
       id: 1,
+      trainerId: 1,
       name: '火焰龙',
       element: 'fire',
       skills: [
@@ -201,7 +245,7 @@ describe('图鉴页面', () => {
     await db.monsters.add(monster);
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/warehouse']}>
         <PokedexPage />
       </MemoryRouter>
     );
@@ -239,6 +283,44 @@ describe('图鉴页面', () => {
       const backLink = screen.getByText('← 返回');
       expect(backLink).toBeInTheDocument();
       expect(backLink.closest('a')).toHaveAttribute('href', '/');
+    });
+  });
+
+  it('道馆徽章只能给同属性伙伴分配，并真实强化属性', async () => {
+    await db.monsters.bulkAdd([
+      {
+        id: 1, trainerId: 1, name: '双属性小伙伴', element: 'fire', elements: ['fire', 'bug'], skills: [], avatar: 'butterfly',
+        hp: 80, attack: 60, defense: 50, speed: 55, level: 5, exp: 0,
+        createdBy: 'user', createdAt: new Date(),
+      },
+      {
+        id: 2, trainerId: 1, name: '水属性伙伴', element: 'water', skills: [], avatar: 'fish',
+        hp: 80, attack: 60, defense: 50, speed: 55, level: 5, exp: 0,
+        createdBy: 'user', createdAt: new Date(),
+      },
+    ]);
+    await db.badges.add({
+      trainerId: 1, continentId: 'fire', name: '红莲徽章', emoji: '🔥', element: 'fire', kind: 'gym', earnedAt: new Date(),
+    });
+
+    render(
+      <MemoryRouter>
+        <PokedexPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => fireEvent.click(screen.getByText(/徽章 1/)));
+    fireEvent.click(screen.getByText('分配强化'));
+    expect(screen.getByText('双属性小伙伴')).toBeInTheDocument();
+    expect(screen.queryByText('水属性伙伴')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '攻击 +4' }));
+    await waitFor(async () => {
+      const [monster] = await db.monsters.where('id').equals(1).toArray();
+      const [badge] = await db.badges.toArray();
+      expect(monster.attack).toBe(64);
+      expect(badge.assignedMonsterId).toBe(1);
+      expect(badge.statBoost).toBe('attack');
     });
   });
 });

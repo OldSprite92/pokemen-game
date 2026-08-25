@@ -1,7 +1,30 @@
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 
-const httpServer = createServer();
+const httpServer = createServer((req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (req.url?.startsWith('/health')) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      ok: true,
+      service: 'pokemon-adventure-multiplayer',
+      rooms: rooms.size,
+    }));
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Pokemon Adventure multiplayer server is running.');
+});
 const io = new Server(httpServer, {
   cors: {
     origin: '*',

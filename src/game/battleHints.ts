@@ -1,5 +1,5 @@
 import type { Monster, Skill } from '../types';
-import { getTypeEffectiveness } from './battleEngine';
+import { getMonsterTypeEffectiveness, getMonsterTypeMatchupHint, getSkillStatusConfig } from './battleEngine';
 
 export type SkillHintLevel = 'recommended' | 'normal' | 'careful';
 
@@ -10,15 +10,29 @@ export interface SkillHint {
   colorClass: string;
 }
 
+export type SkillRole = 'stable' | 'burst' | 'tactical';
+
+export function getSkillRole(skill: Skill): { role: SkillRole; label: string; description: string } {
+  if (getSkillStatusConfig(skill)) {
+    return { role: 'tactical', label: '战术技', description: '有机会带来状态效果' };
+  }
+  if (skill.power >= 24 || skill.accuracy < 90) {
+    return { role: 'burst', label: '爆发技', description: '伤害更高，但需要看准时机' };
+  }
+  return { role: 'stable', label: '稳定技', description: '命中稳定，适合安心出手' };
+}
+
 export function getSkillHint(skill: Skill, attacker: Monster, defender: Monster): SkillHint {
-  const effectiveness = getTypeEffectiveness(skill.element, defender.element);
+  const effectiveness = getMonsterTypeEffectiveness(skill.element, defender);
   const estimatedDamage = Math.max(5, skill.power + (attacker.attack - defender.defense) / 2) * effectiveness;
 
   if (effectiveness === 0 || skill.accuracy < 80 || effectiveness < 1) {
     return {
       level: 'careful',
       label: '小心',
-      reason: effectiveness === 0 ? '可能没有效果' : effectiveness < 1 ? '效果不太好' : '可能打不中',
+      reason: effectiveness !== 1
+        ? getMonsterTypeMatchupHint(skill.element, defender)
+        : '可能打不中',
       colorClass: 'bg-red-500/20 text-red-200 border-red-400/50',
     };
   }
@@ -27,7 +41,7 @@ export function getSkillHint(skill: Skill, attacker: Monster, defender: Monster)
     return {
       level: 'recommended',
       label: '推荐',
-      reason: effectiveness > 1 ? '属性很有效' : '很稳定',
+      reason: effectiveness > 1 ? getMonsterTypeMatchupHint(skill.element, defender) : '很稳定',
       colorClass: 'bg-green-500/20 text-green-200 border-green-400/50',
     };
   }

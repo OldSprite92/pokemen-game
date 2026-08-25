@@ -1,4 +1,4 @@
-import type { Continent, MapCell, MapDifficulty, Monster } from '../types';
+import type { Adventure, Continent, MapCell, MapDifficulty, Monster } from '../types';
 import { generateMapGrid } from './continentData';
 
 export interface MapDifficultyConfig {
@@ -70,6 +70,60 @@ const DEFAULT_PROGRESS: StoredDifficultyProgress = {
   completed: {},
   parentUnlocked: {},
 };
+
+/**
+ * A completed difficulty is a finished expedition, not a disposable map.
+ * Keep its explored tiles separately from the continent's currently selected
+ * difficulty so returning to it never rerolls the route or its resources.
+ */
+export interface DifficultyExploration {
+  cells: MapCell[];
+  adventure: Adventure;
+  savedAt: number;
+}
+
+type StoredExplorations = Record<string, Partial<Record<MapDifficulty, DifficultyExploration>>>;
+
+function explorationKey(trainerId?: number) {
+  return trainerId ? `mapExploration_trainer_${trainerId}` : 'mapExploration';
+}
+
+function getStoredExplorations(trainerId?: number): StoredExplorations {
+  try {
+    return JSON.parse(localStorage.getItem(explorationKey(trainerId)) || '{}') as StoredExplorations;
+  } catch {
+    return {};
+  }
+}
+
+export function getDifficultyExploration(
+  continentId: string,
+  difficulty?: MapDifficulty,
+  trainerId?: number,
+): DifficultyExploration | null {
+  return getStoredExplorations(trainerId)[continentId]?.[normalizeDifficulty(difficulty)] ?? null;
+}
+
+export function saveDifficultyExploration(
+  continentId: string,
+  difficulty: MapDifficulty | undefined,
+  trainerId: number | undefined,
+  cells: MapCell[],
+  adventure: Adventure,
+) {
+  const normalized = normalizeDifficulty(difficulty);
+  const explorations = getStoredExplorations(trainerId);
+  explorations[continentId] = {
+    ...explorations[continentId],
+    [normalized]: {
+      // Store value copies so later React state mutations cannot change a saved route.
+      cells: cells.map((cell) => ({ ...cell })),
+      adventure: { ...adventure, events: [...adventure.events] },
+      savedAt: Date.now(),
+    },
+  };
+  localStorage.setItem(explorationKey(trainerId), JSON.stringify(explorations));
+}
 
 export const MAP_DIFFICULTIES: MapDifficulty[] = ['easy', 'hard', 'hell'];
 

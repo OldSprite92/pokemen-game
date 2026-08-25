@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { db } from '../db/database';
 import { useGameStore } from '../stores/gameStore';
 import { ELEMENT_CONFIG } from '../components/create/StepElement';
+import MonsterElementBadges from '../components/MonsterElementBadges';
 import { AVATAR_OPTIONS } from '../components/create/StepAvatar';
 import { generateRandomSkill } from '../game/rewardSystem';
 import { ALL_WILD_MONSTERS } from '../game/wildMonsters';
 import { generateMonsterBackstory } from '../game/monsterStory';
+import { getMonsterElements } from '../game/monsterElements';
 import type { AdventureDiaryEntry, Badge, Monster, ElementType, EncounterRecord, Sticker } from '../types';
 
 /** 技能石配置 */
@@ -33,13 +35,15 @@ const SKILL_STONE_CONFIG: Record<ElementType, { emoji: string; color: string; na
 };
 
 export default function PokedexPage() {
+  const location = useLocation();
+  const isWarehouse = location.pathname === '/warehouse';
   const currentTrainer = useGameStore((state) => state.currentTrainer);
   const [monsters, setMonsters] = useState<Monster[]>([]);
   const [encounters, setEncounters] = useState<EncounterRecord[]>([]);
   const [badges, setBadges] = useState<Badge[]>([]);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [diaryEntries, setDiaryEntries] = useState<AdventureDiaryEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<'owned' | 'encountered' | 'badges' | 'stickers' | 'diary'>('owned');
+  const [activeTab, setActiveTab] = useState<'owned' | 'encountered' | 'badges' | 'stickers' | 'diary'>(isWarehouse ? 'owned' : 'encountered');
   const [loading, setLoading] = useState(true);
   const [selectedMonster, setSelectedMonster] = useState<Monster | null>(null);
   const [showSkillDetail, setShowSkillDetail] = useState(false);
@@ -48,6 +52,7 @@ export default function PokedexPage() {
   const [useMessage, setUseMessage] = useState('');
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [isEncounterDetail, setIsEncounterDetail] = useState(false); // 区分遭遇记录详情
+  const [badgeToAssign, setBadgeToAssign] = useState<Badge | null>(null);
 
   // 获取当前训练师的 localStorage key
   const getStorageKey = (key: string) => {
@@ -62,9 +67,19 @@ export default function PokedexPage() {
     loadSkillStones();
   }, [currentTrainer]); // 当训练师变化时重新加载技能石
 
+  useEffect(() => {
+    setActiveTab(isWarehouse ? 'owned' : 'encountered');
+  }, [isWarehouse]);
+
   const loadMonsters = async () => {
+    const trainerId = currentTrainer?.id;
+    if (trainerId === undefined) {
+      setMonsters([]);
+      setLoading(false);
+      return;
+    }
     try {
-      const all = await db.monsters.toArray();
+      const all = await db.monsters.where('trainerId').equals(trainerId).toArray();
       setMonsters(all.reverse());
     } catch (err) {
       console.error('加载失败:', err);
@@ -74,8 +89,13 @@ export default function PokedexPage() {
   };
 
   const loadEncounters = async () => {
+    const trainerId = currentTrainer?.id;
+    if (trainerId === undefined) {
+      setEncounters([]);
+      return;
+    }
     try {
-      const all = await db.encounters.toArray();
+      const all = await db.encounters.where('trainerId').equals(trainerId).toArray();
       const unique = new Map<string, EncounterRecord>();
       all.forEach((e) => {
         // 确保 encounteredAt 是 Date 对象
@@ -109,17 +129,21 @@ export default function PokedexPage() {
 
   const loadCollections = async () => {
     const trainerId = currentTrainer?.id;
-    const [allBadges, allStickers, allDiary] = await Promise.all([
-      db.badges.toArray(),
-      db.stickers.toArray(),
-      db.diaryEntries.toArray(),
+    if (trainerId === undefined) {
+      setBadges([]);
+      setStickers([]);
+      setDiaryEntries([]);
+      return;
+    }
+    const [trainerBadges, trainerStickers, trainerDiary] = await Promise.all([
+      db.badges.where('trainerId').equals(trainerId).toArray(),
+      db.stickers.where('trainerId').equals(trainerId).toArray(),
+      db.diaryEntries.where('trainerId').equals(trainerId).toArray(),
     ]);
-    setBadges(allBadges.filter((item) => !trainerId || item.trainerId === trainerId).reverse());
-    setStickers(allStickers.filter((item) => !trainerId || item.trainerId === trainerId).reverse());
+    setBadges(trainerBadges.reverse());
+    setStickers(trainerStickers.reverse());
     setDiaryEntries(
-      allDiary
-        .filter((item) => !trainerId || item.trainerId === trainerId)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      trainerDiary.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     );
   };
 
@@ -131,6 +155,8 @@ export default function PokedexPage() {
   const handleDelete = async (id: number) => {
     if (!confirm('确定要删除这只宝可梦吗？')) return;
     try {
+      const monster = await db.monsters.get(id);
+      if (!monster || monster.trainerId !== currentTrainer?.id) return;
       await db.monsters.delete(id);
       setMonsters((prev) => prev.filter((m) => m.id !== id));
       if (selectedMonster?.id === id) {
@@ -156,7 +182,11 @@ export default function PokedexPage() {
     const updatedSkills = [...monster.skills, newSkill];
 
     if (monster.id) {
-      db.monsters.update(monster.id, { skills: updatedSkills } as any);
+      db.monsters
+        .where('id')
+        .equals(monster.id)
+        .and((item) => item.trainerId === currentTrainer?.id)
+        .modify({ skills: updatedSkills });
     }
 
     const newStones = skillStones.filter((_, i) => i !== stoneIndex);
@@ -184,7 +214,11 @@ export default function PokedexPage() {
     const updatedSkills = monster.skills.filter((_, i) => i !== skillIndex);
 
     if (monster.id) {
-      db.monsters.update(monster.id, { skills: updatedSkills } as any);
+      db.monsters
+        .where('id')
+        .equals(monster.id)
+        .and((item) => item.trainerId === currentTrainer?.id)
+        .modify({ skills: updatedSkills });
     }
 
     setMonsters((prev) =>
@@ -269,6 +303,34 @@ export default function PokedexPage() {
       light: '光明宝可梦',
     };
     return speciesMap[m.element] || '未知宝可梦';
+  };
+
+  const assignGymBadge = async (badge: Badge, monster: Monster, statBoost: NonNullable<Badge['statBoost']>) => {
+    if (badge.id === undefined || monster.id === undefined || badge.kind !== 'gym' || !badge.element) return;
+    if (!getMonsterElements(monster).includes(badge.element)) {
+      setUseMessage(`${monster.name}没有${ELEMENT_CONFIG[badge.element].label}属性，不能使用这枚徽章。`);
+      return;
+    }
+    const usedOnMonster = badges.filter((item) => item.kind === 'gym' && item.assignedMonsterId === monster.id);
+    if (usedOnMonster.length >= 2 || usedOnMonster.some((item) => item.statBoost === statBoost)) {
+      setUseMessage('每只伙伴最多装备 2 枚徽章，同一种强化不能重复。');
+      return;
+    }
+    const increase = statBoost === 'hp' ? 6 : statBoost === 'speed' ? 3 : 4;
+    const update: Partial<Monster> = statBoost === 'hp'
+      ? { hp: monster.hp + increase, maxHp: (monster.maxHp ?? monster.hp) + increase }
+      : { [statBoost]: monster[statBoost] + increase } as Partial<Monster>;
+    await db.transaction('rw', db.badges, db.monsters, async () => {
+      await db.badges.update(badge.id!, { assignedMonsterId: monster.id, statBoost });
+      await db.monsters.update(monster.id!, update);
+    });
+    const updatedMonster = { ...monster, ...update } as Monster;
+    setMonsters((previous) => previous.map((item) => item.id === monster.id ? updatedMonster : item));
+    setBadges((previous) => previous.map((item) => item.id === badge.id ? { ...item, assignedMonsterId: monster.id, statBoost } : item));
+    setBadgeToAssign(null);
+    const labels: Record<NonNullable<Badge['statBoost']>, string> = { hp: '体力 +6', attack: '攻击 +4', defense: '防御 +4', speed: '速度 +3' };
+    setUseMessage(`🏅 ${monster.name}获得${labels[statBoost]}！`);
+    setTimeout(() => setUseMessage(''), 2600);
   };
 
   const getDisplayHeight = (m: Monster) => {
@@ -373,16 +435,8 @@ export default function PokedexPage() {
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-1">{selectedMonster.name}</h2>
                 <p className="text-sm text-gray-400 mb-2">{getSpecies(selectedMonster)}</p>
-                <div className="flex items-center gap-2">
-                  <span
-                    className="text-xs px-3 py-1 rounded-full font-bold"
-                    style={{
-                      backgroundColor: getElementColor(selectedMonster.element) + '30',
-                      color: getElementColor(selectedMonster.element),
-                    }}
-                  >
-                    {getElementEmoji(selectedMonster.element)} {ELEMENT_CONFIG[selectedMonster.element]?.label}
-                  </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <MonsterElementBadges monster={selectedMonster} badgeClassName="text-xs px-3 py-1 rounded-full font-bold" />
                   <span className="text-xs px-3 py-1 rounded-full bg-gray-700 text-gray-300 font-bold">
                     Lv.{selectedMonster.level}
                   </span>
@@ -629,18 +683,17 @@ export default function PokedexPage() {
   return (
     <div className="pokedex-page flex flex-col min-h-[100dvh] p-4 gap-4">
       {/* 顶部 */}
-      <div className="flex items-center justify-between">
-        <Link to="/" className="text-blue-400 hover:text-blue-300 text-lg font-bold">
+      <div className="page-topbar sticky top-0 z-40 flex items-center justify-between">
+        <Link to={isWarehouse ? '/backpack' : '/'} className="text-blue-400 hover:text-blue-300 text-lg font-bold">
           ← 返回
         </Link>
-        <h1 className="text-xl font-bold text-yellow-300 pixel-title">📖 宝可梦图鉴</h1>
+        <h1 className="text-xl font-bold text-yellow-300 pixel-title">{isWarehouse ? '宝可梦仓库' : '📖 宝可梦图鉴'}</h1>
         <div className="w-12" />
       </div>
 
       {/* 标签切换 */}
-      <div className="grid grid-cols-3 gap-2">
+      {!isWarehouse && <div className="grid grid-cols-2 gap-2">
         {[
-          { id: 'owned', label: `🎒 我的宝可梦 ${monsters.length}` },
           { id: 'encountered', label: `👁️ 遭遇记录 ${encounters.length}` },
           { id: 'badges', label: `🏅 徽章 ${badges.length}` },
           { id: 'stickers', label: `🌟 贴纸 ${stickers.length}` },
@@ -658,7 +711,9 @@ export default function PokedexPage() {
             {tab.label}
           </button>
         ))}
-      </div>
+      </div>}
+
+      {isWarehouse && <div className="rounded-xl border border-cyan-300/35 bg-cyan-400/10 p-3 text-sm font-bold text-cyan-100">这里装着你已经拥有的伙伴。点一只可以查看资料、使用技能石、整理技能，或删除不需要的伙伴。</div>}
 
       {/* 提示消息 */}
       {useMessage && (
@@ -701,17 +756,9 @@ export default function PokedexPage() {
                       {getAvatarEmoji(monster.avatar)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-bold text-white">{monster.name}</span>
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-lg font-bold"
-                          style={{
-                            backgroundColor: getElementColor(monster.element) + '30',
-                            color: getElementColor(monster.element),
-                          }}
-                        >
-                          {getElementEmoji(monster.element)} {ELEMENT_CONFIG[monster.element]?.label}
-                        </span>
+                        <MonsterElementBadges monster={monster} />
                       </div>
                       <p className="text-sm text-gray-400">
                         Lv.{monster.level} | HP {monster.hp}/{monster.maxHp || monster.hp}
@@ -760,6 +807,7 @@ export default function PokedexPage() {
                     const mockMonster: Monster = {
                       id: undefined,
                       name: encounter.monsterName,
+                      elements: encounter.monsterElements,
                       element: encounter.monsterElement,
                       skills: wildSkills,
                       avatar: encounter.monsterAvatar,
@@ -787,17 +835,9 @@ export default function PokedexPage() {
                       {getAvatarEmoji(encounter.monsterAvatar)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-bold text-white">{encounter.monsterName}</span>
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-lg font-bold"
-                          style={{
-                            backgroundColor: getElementColor(encounter.monsterElement) + '30',
-                            color: getElementColor(encounter.monsterElement),
-                          }}
-                        >
-                          {getElementEmoji(encounter.monsterElement)} {ELEMENT_CONFIG[encounter.monsterElement]?.label}
-                        </span>
+                        <MonsterElementBadges monster={{ element: encounter.monsterElement, elements: encounter.monsterElements }} />
                       </div>
                       <p className="text-sm text-gray-400">
                         Lv.{encounter.monsterLevel} | 在 {encounter.continentName} 遭遇
@@ -825,15 +865,39 @@ export default function PokedexPage() {
                 🗺️ 去挑战大陆Boss
               </Link>
             </div>
-          ) : badges.map((badge) => (
-            <div key={badge.id} className="pixel-border rounded-xl p-4 bg-yellow-500/10 flex items-center gap-4">
-              <div className="text-4xl">{badge.emoji}</div>
-              <div>
-                <p className="text-lg font-bold text-yellow-200">{badge.name}</p>
-                <p className="text-sm text-gray-400">{new Date(badge.earnedAt).toLocaleDateString('zh-CN')} 获得</p>
+          ) : badges.map((badge) => {
+            const assignedMonster = monsters.find((monster) => monster.id === badge.assignedMonsterId);
+            const isAssignable = badge.kind === 'gym' && badge.element && !badge.assignedMonsterId;
+            const boostLabel: Record<NonNullable<Badge['statBoost']>, string> = { hp: '体力 +6', attack: '攻击 +4', defense: '防御 +4', speed: '速度 +3' };
+            return (
+              <div key={badge.id} className="pixel-border rounded-xl p-4 bg-yellow-500/10">
+                <div className="flex items-center gap-4">
+                  <div className="text-4xl">{badge.emoji}</div>
+                  <div className="flex-1">
+                    <p className="text-lg font-bold text-yellow-200">{badge.name}</p>
+                    <p className="text-sm text-gray-400">{new Date(badge.earnedAt).toLocaleDateString('zh-CN')} 获得</p>
+                    {badge.element && <p className="mt-1 text-xs font-bold text-yellow-100">只能强化拥有 {ELEMENT_CONFIG[badge.element].label} 属性的伙伴</p>}
+                    {assignedMonster && badge.statBoost && <p className="mt-1 text-sm font-bold text-green-300">已给 {assignedMonster.name}：{boostLabel[badge.statBoost]}</p>}
+                  </div>
+                  {isAssignable && <button onClick={() => setBadgeToAssign(badge)} className="rounded-lg bg-yellow-400 px-3 py-2 text-sm font-bold text-gray-900">分配强化</button>}
+                </div>
+                {badgeToAssign?.id === badge.id && badge.element && (
+                  <div className="mt-4 border-t border-yellow-300/30 pt-3">
+                    <p className="mb-2 text-sm font-bold text-yellow-100">先选一只 {ELEMENT_CONFIG[badge.element].label} 属性伙伴，再选强化项目：</p>
+                    {monsters.filter((monster) => getMonsterElements(monster).includes(badge.element!)).map((monster) => (
+                      <div key={monster.id} className="mb-2 rounded-lg bg-gray-800/70 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-bold text-white">{monster.name}</span><MonsterElementBadges monster={monster} badgeClassName="text-xs font-bold" /></div>
+                        <div className="mt-2 grid grid-cols-4 gap-1">{([
+                          ['hp', '体力 +6'], ['attack', '攻击 +4'], ['defense', '防御 +4'], ['speed', '速度 +3'],
+                        ] as const).map(([stat, label]) => <button key={stat} onClick={() => assignGymBadge(badge, monster, stat)} className="rounded bg-yellow-500/20 px-1 py-2 text-xs font-bold text-yellow-100 hover:bg-yellow-500/40">{label}</button>)}</div>
+                      </div>
+                    ))}
+                    <button onClick={() => setBadgeToAssign(null)} className="mt-1 text-sm font-bold text-gray-300">取消</button>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
