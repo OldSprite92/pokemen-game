@@ -11,12 +11,14 @@ import { APP_VERSION } from '../game/appVersion';
 import type { Continent, Monster } from '../types';
 
 const menuItems = [
+  { to: '/language-lab', label: '🧪 语言研究所', color: 'bg-indigo-500 hover:bg-indigo-600', emoji: '🧪' },
   { to: '/create', label: '🎨 创造宝可梦', color: 'bg-red-500 hover:bg-red-600', emoji: '🎨' },
   { to: '/adventure', label: '🗺️ 开始冒险', color: 'bg-orange-500 hover:bg-orange-600', emoji: '🗺️' },
   { to: '/battle-select', label: '⚔️ 开始对战', color: 'bg-green-500 hover:bg-green-600', emoji: '⚔️' },
   { to: '/multiplayer', label: '🌐 家庭联机', color: 'bg-pink-500 hover:bg-pink-600', emoji: '🌐' },
   { to: '/pokedex', label: '📖 宝可梦图鉴', color: 'bg-blue-500 hover:bg-blue-600', emoji: '📖' },
   { to: '/backpack', label: '🎒 训练师背包', color: 'bg-cyan-600 hover:bg-cyan-700', emoji: '🎒' },
+  { to: '/shop', label: '🏪 精灵球商店', color: 'bg-amber-600 hover:bg-amber-700', emoji: '🏪' },
   { to: '/hospital', label: '🏥 宝可梦医院', color: 'bg-rose-500 hover:bg-rose-600', emoji: '🏥' },
   { to: '/trainer', label: '🧑‍🎤 训练师', color: 'bg-purple-500 hover:bg-purple-600', emoji: '🧑‍🎤' },
 ];
@@ -174,12 +176,13 @@ export default function HomePage() {
               text-white text-xl font-bold
               flex items-center justify-center gap-3
               h-16 px-6 rounded-lg
-              transition-all duration-150
+              transition-[transform,background-color,box-shadow] duration-150
               active:scale-95 active:translate-y-0.5
+              focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300
               shadow-lg
             `}
           >
-            <span className="text-2xl">{item.emoji}</span>
+            <span className="text-2xl" aria-hidden="true">{item.emoji}</span>
             <span>{item.label.replace(item.emoji + ' ', '')}</span>
           </Link>
         ))}

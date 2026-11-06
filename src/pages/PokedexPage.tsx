@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { db } from '../db/database';
 import { useGameStore } from '../stores/gameStore';
@@ -9,6 +9,10 @@ import { generateRandomSkill } from '../game/rewardSystem';
 import { ALL_WILD_MONSTERS } from '../game/wildMonsters';
 import { generateMonsterBackstory } from '../game/monsterStory';
 import { getMonsterElements } from '../game/monsterElements';
+import { GymBadgeEmblem, SuperBadgeEmblem } from '../components/GymBadgeEmblem';
+import { SUPER_BADGE_ELEMENTS, SUPER_BADGE_SLOT_LABELS, getSuperBadgeIngredients, type SuperBadgeElement } from '../game/superBadge';
+import { ELEMENT_LESSONS } from '../game/languageLab';
+import { getMasteryStatus, loadLanguageProgress } from '../game/languageProgress';
 import type { AdventureDiaryEntry, Badge, Monster, ElementType, EncounterRecord, Sticker } from '../types';
 
 /** 技能石配置 */
@@ -34,6 +38,17 @@ const SKILL_STONE_CONFIG: Record<ElementType, { emoji: string; color: string; na
   light: { emoji: '☀️', color: '#fbbf24', name: '光之石' },
 };
 
+// Match the seven-segment badge wheel: the empty core becomes the Super Badge.
+const FUSION_SLOT_LAYOUT: Record<SuperBadgeElement, { left: number; top: number }> = {
+  psychic: { left: 27, top: 22 },
+  poison: { left: 54, top: 17 },
+  rock: { left: 83, top: 43 },
+  water: { left: 75, top: 74 },
+  grass: { left: 50, top: 88 },
+  fire: { left: 26, top: 70 },
+  electric: { left: 14, top: 47 },
+};
+
 export default function PokedexPage() {
   const location = useLocation();
   const isWarehouse = location.pathname === '/warehouse';
@@ -53,6 +68,13 @@ export default function PokedexPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [isEncounterDetail, setIsEncounterDetail] = useState(false); // 区分遭遇记录详情
   const [badgeToAssign, setBadgeToAssign] = useState<Badge | null>(null);
+  const [showBadgeFusion, setShowBadgeFusion] = useState(false);
+  const [selectedFusionBadgeId, setSelectedFusionBadgeId] = useState<number | null>(null);
+  const [fusionSlots, setFusionSlots] = useState<Partial<Record<SuperBadgeElement, number>>>({});
+  const [isFusingBadge, setIsFusingBadge] = useState(false);
+  const languageProgress = useMemo(() => loadLanguageProgress(currentTrainer?.id), [currentTrainer?.id]);
+  const masteredPinyinCount = Object.values(languageProgress.pinyin).filter((record) => getMasteryStatus(record) === 'mastered').length;
+  const masteredEnglishCount = Object.keys(ELEMENT_LESSONS).filter((element) => getMasteryStatus(languageProgress.english[element as keyof typeof languageProgress.english]) === 'mastered').length;
 
   // 获取当前训练师的 localStorage key
   const getStorageKey = (key: string) => {
@@ -331,6 +353,108 @@ export default function PokedexPage() {
     const labels: Record<NonNullable<Badge['statBoost']>, string> = { hp: '体力 +6', attack: '攻击 +4', defense: '防御 +4', speed: '速度 +3' };
     setUseMessage(`🏅 ${monster.name}获得${labels[statBoost]}！`);
     setTimeout(() => setUseMessage(''), 2600);
+  };
+
+  const openBadgeFusion = () => {
+    setFusionSlots({});
+    setSelectedFusionBadgeId(null);
+    setShowBadgeFusion(true);
+  };
+
+  const fillFusionSlot = (element: SuperBadgeElement) => {
+    const occupiedBadgeId = fusionSlots[element];
+    if (occupiedBadgeId !== undefined) {
+      setFusionSlots((previous) => {
+        const next = { ...previous };
+        delete next[element];
+        return next;
+      });
+      return;
+    }
+    const selectedBadge = badges.find((badge) => badge.id === selectedFusionBadgeId);
+    if (!selectedBadge || selectedBadge.id === undefined || selectedBadge.element !== element || selectedBadge.kind !== 'gym') {
+      setUseMessage(`请选择${SUPER_BADGE_SLOT_LABELS[element]}属性徽章，填入这个槽位。`);
+      setTimeout(() => setUseMessage(''), 2400);
+      return;
+    }
+    if (Object.values(fusionSlots).includes(selectedBadge.id)) {
+      setUseMessage('这枚徽章已经放进圆盘了。');
+      setTimeout(() => setUseMessage(''), 2200);
+      return;
+    }
+    setFusionSlots((previous) => ({ ...previous, [element]: selectedBadge.id }));
+    setSelectedFusionBadgeId(null);
+  };
+
+  const fuseSuperBadge = async () => {
+    const trainerId = currentTrainer?.id;
+    const selectedIds = SUPER_BADGE_ELEMENTS.map((element) => fusionSlots[element]);
+    if (trainerId === undefined || selectedIds.some((id) => id === undefined) || isFusingBadge) return;
+    if (!window.confirm('合成会消耗圆盘中的 7 枚道馆徽章，确定合成超级勋章吗？')) return;
+
+    setIsFusingBadge(true);
+    try {
+      await db.transaction('rw', db.badges, async () => {
+        const latestBadges = await db.badges.where('trainerId').equals(trainerId).toArray();
+        const ingredients = SUPER_BADGE_ELEMENTS.map((element) => latestBadges.find((badge) => badge.id === fusionSlots[element] && badge.kind === 'gym' && badge.element === element));
+        if (ingredients.some((badge) => !badge?.id)) throw new Error('合成材料已变化');
+        await db.badges.bulkDelete(ingredients.map((badge) => badge!.id!));
+        await db.badges.add({
+          trainerId,
+          continentId: 'super-badge',
+          name: '超级勋章',
+          emoji: '🌟',
+          kind: 'super',
+          earnedAt: new Date(),
+        });
+      });
+      await loadCollections();
+      setShowBadgeFusion(false);
+      setFusionSlots({});
+      setUseMessage('🌟 合成成功！超级勋章已放入徽章盒。');
+      setTimeout(() => setUseMessage(''), 2800);
+    } catch (err) {
+      console.error('合成超级勋章失败:', err);
+      setUseMessage('合成失败：请确认七枚属性徽章都仍在圆盘中。');
+    } finally {
+      setIsFusingBadge(false);
+    }
+  };
+
+  const useSuperBadge = async (badge: Badge) => {
+    const trainerId = currentTrainer?.id;
+    if (trainerId === undefined || badge.id === undefined || badge.kind !== 'super' || badge.usedAt || monsters.length === 0) return;
+    if (!window.confirm('使用后会随机强化一只伙伴的 HP、攻击、防御和速度各 1 点，确定使用吗？')) return;
+
+    const target = monsters[Math.floor(Math.random() * monsters.length)];
+    if (!target || target.id === undefined) return;
+    const update: Partial<Monster> = {
+      hp: target.hp + 1,
+      maxHp: (target.maxHp ?? target.hp) + 1,
+      attack: target.attack + 1,
+      defense: target.defense + 1,
+      speed: target.speed + 1,
+    };
+    try {
+      await db.transaction('rw', db.badges, db.monsters, async () => {
+        const latestBadge = await db.badges.get(badge.id!);
+        const latestMonster = await db.monsters.get(target.id!);
+        if (!latestBadge || latestBadge.trainerId !== trainerId || latestBadge.kind !== 'super' || latestBadge.usedAt || !latestMonster || latestMonster.trainerId !== trainerId) {
+          throw new Error('超级勋章已被使用或伙伴已变化');
+        }
+        await db.badges.update(badge.id!, { usedAt: new Date() });
+        await db.monsters.update(target.id!, update);
+      });
+      const updatedTarget = { ...target, ...update } as Monster;
+      setBadges((previous) => previous.map((item) => item.id === badge.id ? { ...item, usedAt: new Date() } : item));
+      setMonsters((previous) => previous.map((item) => item.id === target.id ? updatedTarget : item));
+      if (selectedMonster?.id === target.id) setSelectedMonster(updatedTarget);
+      setUseMessage(`🌟 超级勋章生效！${target.name}的 HP、攻击、防御、速度各 +1。`);
+      setTimeout(() => setUseMessage(''), 3200);
+    } catch (err) {
+      console.error('使用超级勋章失败:', err);
+      setUseMessage('超级勋章暂时无法使用，请稍后再试。');
+    }
   };
 
   const getDisplayHeight = (m: Monster) => {
@@ -691,6 +815,13 @@ export default function PokedexPage() {
         <div className="w-12" />
       </div>
 
+      {!isWarehouse && (
+        <Link to="/language-lab" className="rounded-2xl border-2 border-indigo-300/45 bg-indigo-400/10 p-4 text-indigo-50 shadow-lg transition-colors hover:bg-indigo-400/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-300">
+          <span className="block text-lg font-black">语言学习图鉴</span>
+          <span className="mt-1 block text-sm text-indigo-100/85">拼音已掌握 {masteredPinyinCount}/24 · English 已掌握 {masteredEnglishCount}/18</span>
+        </Link>
+      )}
+
       {/* 标签切换 */}
       {!isWarehouse && <div className="grid grid-cols-2 gap-2">
         {[
@@ -858,6 +989,24 @@ export default function PokedexPage() {
 
       {activeTab === 'badges' && (
         <div className="flex flex-col gap-3">
+          {(() => {
+            const ingredientCount = getSuperBadgeIngredients(badges).length;
+            const alreadyHasSuperBadge = badges.some((badge) => badge.kind === 'super' && !badge.usedAt);
+            return (
+              <section className="rounded-2xl border border-violet-300/35 bg-[radial-gradient(circle_at_50%_0%,rgba(217,151,255,.28),transparent_55%),#211735] p-4 shadow-xl">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-black text-violet-100">🌀 合成勋章</p>
+                    <p className="mt-1 text-xs leading-5 text-violet-100/80">把岩石、水、草、电、火、毒、超能力七枚道馆徽章亲手填入圆盘，合成可强化伙伴的超级勋章。</p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-yellow-200/40 bg-yellow-300/15 px-3 py-2 text-sm font-black text-yellow-100">{ingredientCount}/7</span>
+                </div>
+                <button onClick={openBadgeFusion} disabled={alreadyHasSuperBadge} className="mt-3 w-full rounded-xl border border-yellow-100/50 bg-gradient-to-r from-yellow-300 to-amber-500 px-4 py-3 font-black text-slate-950 shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:border-gray-600 disabled:bg-gray-700 disabled:text-gray-400">
+                  {alreadyHasSuperBadge ? '超级勋章已在徽章盒中' : ingredientCount < 7 ? `打开圆盘（还差 ${7 - ingredientCount} 枚）` : '打开合成圆盘'}
+                </button>
+              </section>
+            );
+          })()}
           {badges.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12">
               <p className="text-xl text-gray-400">还没有徽章</p>
@@ -870,16 +1019,18 @@ export default function PokedexPage() {
             const isAssignable = badge.kind === 'gym' && badge.element && !badge.assignedMonsterId;
             const boostLabel: Record<NonNullable<Badge['statBoost']>, string> = { hp: '体力 +6', attack: '攻击 +4', defense: '防御 +4', speed: '速度 +3' };
             return (
-              <div key={badge.id} className="pixel-border rounded-xl p-4 bg-yellow-500/10">
+              <div key={badge.id} className={`pixel-border rounded-xl p-4 ${badge.kind === 'super' ? 'border-violet-300/60 bg-violet-500/15' : 'bg-yellow-500/10'}`}>
                 <div className="flex items-center gap-4">
-                  <div className="text-4xl">{badge.emoji}</div>
+                  {badge.kind === 'gym' && badge.element ? <GymBadgeEmblem element={badge.element} /> : <SuperBadgeEmblem />}
                   <div className="flex-1">
                     <p className="text-lg font-bold text-yellow-200">{badge.name}</p>
                     <p className="text-sm text-gray-400">{new Date(badge.earnedAt).toLocaleDateString('zh-CN')} 获得</p>
                     {badge.element && <p className="mt-1 text-xs font-bold text-yellow-100">只能强化拥有 {ELEMENT_CONFIG[badge.element].label} 属性的伙伴</p>}
                     {assignedMonster && badge.statBoost && <p className="mt-1 text-sm font-bold text-green-300">已给 {assignedMonster.name}：{boostLabel[badge.statBoost]}</p>}
+                    {badge.kind === 'super' && <p className={`mt-1 text-xs font-bold ${badge.usedAt ? 'text-gray-400' : 'text-violet-100'}`}>{badge.usedAt ? '已使用：伙伴已获得全属性 +1' : '可使用：随机让一只伙伴的全属性 +1'}</p>}
                   </div>
                   {isAssignable && <button onClick={() => setBadgeToAssign(badge)} className="rounded-lg bg-yellow-400 px-3 py-2 text-sm font-bold text-gray-900">分配强化</button>}
+                  {badge.kind === 'super' && !badge.usedAt && <button onClick={() => void useSuperBadge(badge)} disabled={monsters.length === 0} className="rounded-lg bg-violet-300 px-3 py-2 text-sm font-black text-violet-950 shadow disabled:cursor-not-allowed disabled:bg-gray-600 disabled:text-gray-300">使用勋章</button>}
                 </div>
                 {badgeToAssign?.id === badge.id && badge.element && (
                   <div className="mt-4 border-t border-yellow-300/30 pt-3">
@@ -898,6 +1049,45 @@ export default function PokedexPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {showBadgeFusion && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#0b0916]/90 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="合成超级勋章">
+          <section className="w-full max-w-lg rounded-[28px] border-2 border-yellow-200/65 bg-[#201631] p-4 shadow-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-2xl font-black text-yellow-200">🌀 合成勋章</p><p className="mt-1 text-sm text-violet-100/90">先点选一枚徽章，再点击圆盘中对应属性的槽位。</p></div>
+              <button onClick={() => setShowBadgeFusion(false)} className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-xl text-white hover:bg-white/20" aria-label="关闭合成圆盘">×</button>
+            </div>
+            <div className="fusion-wheel mt-5" aria-label="七属性徽章合成圆盘">
+              <div className="fusion-wheel-core"><SuperBadgeEmblem size="62%" /></div>
+              {SUPER_BADGE_ELEMENTS.map((element) => {
+                const slotPosition = FUSION_SLOT_LAYOUT[element];
+                const badgeId = fusionSlots[element];
+                const placedBadge = badges.find((badge) => badge.id === badgeId);
+                return <button key={element} onClick={() => fillFusionSlot(element)} className={`fusion-slot ${placedBadge ? 'is-filled' : ''}`} style={{ left: `${slotPosition.left}%`, top: `${slotPosition.top}%` }} aria-label={`${SUPER_BADGE_SLOT_LABELS[element]}属性槽位${placedBadge ? '，已填入' : ''}`} title={placedBadge ? `移除${SUPER_BADGE_SLOT_LABELS[element]}徽章` : `填入${SUPER_BADGE_SLOT_LABELS[element]}徽章`}>
+                  {placedBadge ? <GymBadgeEmblem element={element} size="100%" /> : <span className="text-xl opacity-60">＋</span>}
+                  <span className="fusion-slot-label">{SUPER_BADGE_SLOT_LABELS[element]}</span>
+                </button>;
+              })}
+            </div>
+            <div className="mt-6 rounded-2xl border border-white/15 bg-black/20 p-3">
+              <p className="text-sm font-bold text-yellow-100">选择要填入的道馆徽章</p>
+              <div className="mt-3 flex flex-wrap justify-center gap-3">
+                {getSuperBadgeIngredients(badges).map((badge) => {
+                  const isPlaced = badge.id !== undefined && Object.values(fusionSlots).includes(badge.id);
+                  const isSelected = selectedFusionBadgeId === badge.id;
+                  return badge.element ? <button key={badge.id} onClick={() => !isPlaced && setSelectedFusionBadgeId(isSelected ? null : badge.id ?? null)} disabled={isPlaced} className={`rounded-xl p-1 transition ${isSelected ? 'bg-yellow-300/30 ring-2 ring-yellow-200' : 'bg-white/5'} disabled:cursor-not-allowed disabled:opacity-35`} aria-label={`选择${SUPER_BADGE_SLOT_LABELS[badge.element as SuperBadgeElement]}徽章`}>
+                    <GymBadgeEmblem element={badge.element} />
+                  </button> : null;
+                })}
+              </div>
+              <p className="mt-3 text-center text-xs text-gray-300">已填入 {Object.keys(fusionSlots).length}/7 枚。点击已填入的槽位可取回徽章。</p>
+            </div>
+            <button onClick={() => void fuseSuperBadge()} disabled={Object.keys(fusionSlots).length !== 7 || isFusingBadge} className="mt-4 w-full rounded-xl bg-gradient-to-r from-yellow-300 via-amber-400 to-orange-400 px-5 py-4 text-lg font-black text-slate-950 shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400">
+              {isFusingBadge ? '正在合成…' : Object.keys(fusionSlots).length === 7 ? '🌟 合成超级勋章' : `还需填入 ${7 - Object.keys(fusionSlots).length} 枚徽章`}
+            </button>
+          </section>
         </div>
       )}
 

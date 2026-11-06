@@ -49,6 +49,7 @@ export default function MapPage() {
   const [partyCandidates, setPartyCandidates] = useState<Monster[]>([]);
   const [selectedPartyIds, setSelectedPartyIds] = useState<number[]>([]);
   const [partyLoaded, setPartyLoaded] = useState(false);
+  const [expeditionStarted, setExpeditionStarted] = useState(false);
   const [mustRetreat, setMustRetreat] = useState(false);
   const [parentNarration] = useState(() => localStorage.getItem('parentNarration') !== 'off');
 
@@ -93,6 +94,7 @@ export default function MapPage() {
   const loadContinent = async () => {
     setLoading(true);
     setPartyLoaded(false);
+    setExpeditionStarted(false);
     setMustRetreat(false);
     try {
       const found = await db.continents.where('id').equals(continentId!).first();
@@ -130,7 +132,9 @@ export default function MapPage() {
           ? []
           : await db.monsters.where('trainerId').equals(currentTrainer.id).toArray();
         setPartyCandidates(monsters);
-        setSelectedPartyIds(adventureForMap.mapPartyIds ?? []);
+        // Every map entry starts with a fresh choice.  Do not silently reuse
+        // the last expedition roster, even when this route was resumed.
+        setSelectedPartyIds([]);
         setPartyLoaded(true);
       }
     } catch (err) {
@@ -593,6 +597,7 @@ export default function MapPage() {
     setCurrentAdventure(nextAdventure);
     saveDifficultyExploration(continent.id, nextAdventure.difficulty, currentTrainer?.id, continent.cells, nextAdventure);
     setMustRetreat(false);
+    setExpeditionStarted(true);
   };
 
   const retreatFromMap = () => {
@@ -654,7 +659,7 @@ export default function MapPage() {
   const gymCleared = adventure?.gymProgress?.cleared ?? false;
   const mapPartyIds = adventure?.mapPartyIds ?? [];
 
-  if (partyLoaded && mapPartyIds.length === 0) {
+  if (partyLoaded && !expeditionStarted) {
     const usableCount = partyCandidates.filter(isUsableForExpedition).length;
     return (
       <div className="min-h-[100dvh] bg-[#171226] px-4 py-6 text-white">

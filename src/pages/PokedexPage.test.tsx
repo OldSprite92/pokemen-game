@@ -323,4 +323,43 @@ describe('图鉴页面', () => {
       expect(badge.statBoost).toBe('attack');
     });
   });
+
+  it('训练家可以手动填满七属性圆盘，合成并使用超级勋章', async () => {
+    await db.monsters.add({
+      id: 1, trainerId: 1, name: '被强化的伙伴', element: 'fire', skills: [], avatar: 'dragon',
+      hp: 80, attack: 60, defense: 50, speed: 55, level: 5, exp: 0,
+      createdBy: 'user', createdAt: new Date(),
+    });
+    const requirements = [
+      ['rock', '岩石'], ['water', '水'], ['grass', '草'], ['electric', '电'], ['fire', '火'], ['poison', '毒'], ['psychic', '超能力'],
+    ] as const;
+    await db.badges.bulkAdd(requirements.map(([element, label]) => ({
+      trainerId: 1, continentId: `${element}-gym`, name: `${label}徽章`, emoji: '🏅', element, kind: 'gym' as const, earnedAt: new Date(),
+    })));
+
+    render(<MemoryRouter><PokedexPage /></MemoryRouter>);
+    await waitFor(() => fireEvent.click(screen.getByText(/徽章 7/)));
+    await waitFor(() => expect(screen.getByText('打开合成圆盘')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('打开合成圆盘'));
+
+    for (const [, label] of requirements) {
+      fireEvent.click(screen.getByRole('button', { name: `选择${label}徽章` }));
+      fireEvent.click(screen.getByRole('button', { name: `${label}属性槽位` }));
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: '🌟 合成超级勋章' }));
+    await waitFor(async () => {
+      const badges = await db.badges.toArray();
+      expect(badges).toHaveLength(1);
+      expect(badges[0].kind).toBe('super');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '使用勋章' }));
+    await waitFor(async () => {
+      const upgraded = await db.monsters.get(1);
+      expect(upgraded).toMatchObject({ hp: 81, maxHp: 81, attack: 61, defense: 51, speed: 56 });
+      const [superBadge] = await db.badges.toArray();
+      expect(superBadge.usedAt).toBeInstanceOf(Date);
+    });
+  });
 });

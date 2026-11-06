@@ -1,4 +1,4 @@
-import type { Monster, ElementType, Skill, PokeBallType } from '../types';
+import type { Monster, ElementType, Skill, PokeBallType, MapDifficulty } from '../types';
 import { POKEBALL_CONFIG } from './catchSystem';
 import { learnNewSkill, checkSkillUnlock, getSkillCountByLevel } from './skillPool';
 
@@ -32,23 +32,65 @@ export function generateSkillStone(): { element: ElementType } | null {
   return { element };
 }
 
-/** 随机生成精灵球掉落 */
-export function generatePokeballDrops(): { type: PokeBallType; count: number }[] {
-  const totalCount = 1 + Math.floor(Math.random() * 3); // 1-3个
-  const drops: { type: PokeBallType; count: number }[] = [];
+/**
+ * Each difficulty has its own complete 100% distribution. Higher difficulties
+ * steadily exchange common-ball weight for rare-ball weight.
+ */
+export const POKEBALL_DROP_RATES: Record<MapDifficulty, Record<PokeBallType, number>> = {
+  easy: {
+    normal: 76,
+    great: 20,
+    ultra: 3.5,
+    master: 0.5,
+    legend: 0,
+    transcend: 0,
+  },
+  hard: {
+    normal: 64,
+    great: 24,
+    ultra: 8,
+    master: 3,
+    legend: 0.8,
+    transcend: 0.2,
+  },
+  hell: {
+    normal: 50,
+    great: 25,
+    ultra: 14,
+    master: 7,
+    legend: 3,
+    transcend: 1,
+  },
+};
 
-  const ballTypes: PokeBallType[] = ['normal', 'normal', 'normal', 'great', 'great', 'ultra', 'master'];
-  const weights = [70, 70, 70, 20, 20, 8, 2]; // 概率权重
+const POKEBALL_DROP_ORDER: PokeBallType[] = [
+  'normal',
+  'great',
+  'ultra',
+  'master',
+  'legend',
+  'transcend',
+];
+
+/** 随地图难度随机生成 1～3 个精灵球掉落。 */
+export function generatePokeballDrops(
+  difficulty: MapDifficulty = 'easy',
+  random: () => number = Math.random,
+): { type: PokeBallType; count: number }[] {
+  const totalCount = 1 + Math.floor(random() * 3); // 1-3个
+  const drops: { type: PokeBallType; count: number }[] = [];
+  const rates = POKEBALL_DROP_RATES[difficulty];
+  const totalWeight = POKEBALL_DROP_ORDER.reduce((sum, type) => sum + rates[type], 0);
 
   for (let i = 0; i < totalCount; i++) {
-    const roll = Math.random() * 100;
+    const roll = random() * totalWeight;
     let cumulative = 0;
-    let selected: PokeBallType = 'normal';
+    let selected: PokeBallType = POKEBALL_DROP_ORDER[POKEBALL_DROP_ORDER.length - 1];
 
-    for (let j = 0; j < ballTypes.length; j++) {
-      cumulative += weights[j];
+    for (const type of POKEBALL_DROP_ORDER) {
+      cumulative += rates[type];
       if (roll < cumulative) {
-        selected = ballTypes[j];
+        selected = type;
         break;
       }
     }
@@ -65,10 +107,10 @@ export function generatePokeballDrops(): { type: PokeBallType; count: number }[]
 }
 
 /** 生成完整战斗奖励 */
-export function generateBattleReward(enemy: Monster): BattleReward {
+export function generateBattleReward(enemy: Monster, difficulty: MapDifficulty = 'easy'): BattleReward {
   const exp = calculateExpReward(enemy);
   const skillStoneResult = generateSkillStone();
-  const pokeballs = generatePokeballDrops();
+  const pokeballs = generatePokeballDrops(difficulty);
 
   return {
     exp,

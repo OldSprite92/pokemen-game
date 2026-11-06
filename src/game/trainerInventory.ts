@@ -53,6 +53,19 @@ export function getStoredPokeBalls(trainerId?: number): Record<PokeBallType, num
   }
 }
 
+export function setStoredPokeBalls(
+  pokeballs: Record<PokeBallType, number>,
+  trainerId?: number,
+) {
+  const normalized = Object.fromEntries(
+    Object.entries({ ...DEFAULT_POKEBALLS, ...pokeballs }).map(([type, count]) => [
+      type,
+      Math.max(0, Math.floor(Number(count) || 0)),
+    ]),
+  ) as Record<PokeBallType, number>;
+  localStorage.setItem(keyFor('pokeballs', trainerId), JSON.stringify(normalized));
+}
+
 export function getStoredSkillStones(trainerId?: number): StoredSkillStone[] {
   const saved = localStorage.getItem(keyFor('skillStones', trainerId));
   if (!saved) return [];

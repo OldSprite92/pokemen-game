@@ -16,6 +16,8 @@ import GymPage from './pages/GymPage'
 import GymBattlePage from './pages/GymBattlePage'
 import BackpackPage from './pages/BackpackPage'
 import HospitalPage from './pages/HospitalPage'
+import ShopPage from './pages/ShopPage'
+import LanguageLabPage from './pages/LanguageLabPage'
 
 function AppInitializer() {
   useEffect(() => {
@@ -50,6 +52,8 @@ export default function App() {
         <Route path="/team-battle" element={<MultiplayerBattlePage />} />
         <Route path="/backpack" element={<BackpackPage />} />
         <Route path="/hospital" element={<HospitalPage />} />
+        <Route path="/shop" element={<ShopPage />} />
+        <Route path="/language-lab" element={<LanguageLabPage />} />
       </Routes>
     </BrowserRouter>
   )

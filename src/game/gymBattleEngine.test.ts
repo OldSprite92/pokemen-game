@@ -22,6 +22,8 @@ describe('道馆同时队伍战', () => {
     expect(result.winner).toBe('player');
     expect(result.log.some((line) => line.includes('火一号'))).toBe(true);
     expect(result.log.some((line) => line.includes('火二号'))).toBe(true);
+    expect(result.lastRoundEffects).toHaveLength(2);
+    expect(result.lastRoundEffects.every((effect) => effect.attacker === 'player' && effect.didHit)).toBe(true);
   });
 
   it('自由换人会用替补替换场上伙伴并给换入伙伴首回合减伤', () => {

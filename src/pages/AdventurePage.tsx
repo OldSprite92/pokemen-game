@@ -8,6 +8,7 @@ import VoiceTextInput from '../components/VoiceTextInput';
 import {
   MAP_DIFFICULTIES,
   createDifficultyCells,
+  deleteDifficultyExploration,
   getDifficultyExploration,
   getMapDifficultyConfig,
   hasCompletedDifficulty,
@@ -26,6 +27,7 @@ export default function AdventurePage() {
   const [customColor, setCustomColor] = useState('#ef4444');
   const [trainerMonsters, setTrainerMonsters] = useState<Monster[]>([]);
   const [unlockMessage, setUnlockMessage] = useState<string | null>(null);
+  const [deletingMapId, setDeletingMapId] = useState<string | null>(null);
   const currentTrainer = useGameStore((state) => state.currentTrainer);
 
   useEffect(() => {
@@ -146,6 +148,29 @@ export default function AdventurePage() {
     }
   };
 
+  const handleDeleteCustomMap = async (continent: Continent) => {
+    if (!continent.isCustom || deletingMapId) return;
+    const confirmed = window.confirm(`确定删除“${continent.name}”吗？这会同时删除该地图的探索记录，删除后无法恢复。`);
+    if (!confirmed) return;
+
+    setDeletingMapId(continent.id);
+    try {
+      await db.transaction('rw', db.continents, db.adventures, async () => {
+        await db.adventures.where('continentId').equals(continent.id).delete();
+        await db.continents.delete(continent.id);
+      });
+      deleteDifficultyExploration(continent.id, currentTrainer?.id);
+      setContinents((previous) => previous.filter((item) => item.id !== continent.id));
+      setUnlockMessage(`已删除地图“${continent.name}”。`);
+      setTimeout(() => setUnlockMessage(null), 3500);
+    } catch (err) {
+      console.error('删除地图失败:', err);
+      setUnlockMessage('删除地图失败，请稍后再试。');
+    } finally {
+      setDeletingMapId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
@@ -190,10 +215,20 @@ export default function AdventurePage() {
                 {continent.emoji}
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-lg font-bold text-white">{continent.name}</h3>
                   {completedEasy && <span className="text-green-400 text-sm">✅ 简单已通关</span>}
                   {continent.isCustom && <span className="text-yellow-400 text-sm">⭐ 自定义</span>}
+                  {continent.isCustom && (
+                    <button
+                      onClick={() => void handleDeleteCustomMap(continent)}
+                      disabled={deletingMapId === continent.id}
+                      className="rounded-md border border-red-300/50 bg-red-500/15 px-2 py-1 text-xs font-black text-red-100 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={`删除地图 ${continent.name}`}
+                    >
+                      {deletingMapId === continent.id ? '删除中…' : '删除地图'}
+                    </button>
+                  )}
                 </div>
                 <p className="text-sm text-gray-300">{continent.description}</p>
                 <div className="flex items-center gap-2 mt-1">

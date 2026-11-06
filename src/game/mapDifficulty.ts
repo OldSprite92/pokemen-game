@@ -125,6 +125,20 @@ export function saveDifficultyExploration(
   localStorage.setItem(explorationKey(trainerId), JSON.stringify(explorations));
 }
 
+/** Remove a deleted custom map's saved route for this trainer. */
+export function deleteDifficultyExploration(continentId: string, trainerId?: number) {
+  const explorations = getStoredExplorations(trainerId);
+  if (explorations[continentId]) {
+    delete explorations[continentId];
+    localStorage.setItem(explorationKey(trainerId), JSON.stringify(explorations));
+  }
+
+  const progress = getDifficultyProgress(trainerId);
+  delete progress.completed[continentId];
+  delete progress.parentUnlocked[continentId];
+  saveDifficultyProgress(progress, trainerId);
+}
+
 export const MAP_DIFFICULTIES: MapDifficulty[] = ['easy', 'hard', 'hell'];
 
 export function normalizeDifficulty(difficulty?: MapDifficulty): MapDifficulty {

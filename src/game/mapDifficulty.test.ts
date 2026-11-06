@@ -3,6 +3,7 @@ import type { Continent, Monster } from '../types';
 import {
   createBossMonster,
   createDifficultyCells,
+  deleteDifficultyExploration,
   getDifficultyExploration,
   hasCompletedDifficulty,
   isDifficultyUnlocked,
@@ -100,5 +101,16 @@ describe('mapDifficulty', () => {
     const restored = getDifficultyExploration(continent.id, 'easy', 7);
     expect(restored?.cells).toEqual(cells);
     expect(restored?.adventure.currentPosition).toEqual({ x: 3, y: 2 });
+  });
+
+  it('删除自定义地图时会清理对应的探索和难度记录', () => {
+    const adventure = { continentId: continent.id, difficulty: 'easy' as const, currentPosition: { x: 3, y: 2 }, events: [] };
+    saveDifficultyExploration(continent.id, 'easy', 7, createDifficultyCells(continent, 'easy'), adventure);
+    markDifficultyComplete(continent.id, 'easy', 7);
+
+    deleteDifficultyExploration(continent.id, 7);
+
+    expect(getDifficultyExploration(continent.id, 'easy', 7)).toBeNull();
+    expect(hasCompletedDifficulty(continent.id, 'easy', 7)).toBe(false);
   });
 });

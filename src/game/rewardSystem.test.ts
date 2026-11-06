@@ -7,6 +7,7 @@ import {
   generateRandomSkill,
   applyExp,
   generateRewardText,
+  POKEBALL_DROP_RATES,
 } from '../game/rewardSystem';
 import type { Monster } from '../types';
 
@@ -71,10 +72,52 @@ describe('奖励系统', () => {
 
     it('掉落的精灵球类型有效', () => {
       const drops = generatePokeballDrops();
-      const validTypes = ['normal', 'great', 'ultra', 'master'];
+      const validTypes = ['normal', 'great', 'ultra', 'master', 'legend', 'transcend'];
       drops.forEach((drop) => {
         expect(validTypes).toContain(drop.type);
       });
+    });
+
+    it('每档难度的掉落权重总和都是100%', () => {
+      Object.values(POKEBALL_DROP_RATES).forEach((rates) => {
+        expect(Object.values(rates).reduce((sum, rate) => sum + rate, 0)).toBe(100);
+      });
+    });
+
+    it('地图越难，普通球越少、稀有球越多', () => {
+      expect(POKEBALL_DROP_RATES.easy.normal).toBeGreaterThan(POKEBALL_DROP_RATES.hard.normal);
+      expect(POKEBALL_DROP_RATES.hard.normal).toBeGreaterThan(POKEBALL_DROP_RATES.hell.normal);
+      expect(POKEBALL_DROP_RATES.easy.master).toBeLessThan(POKEBALL_DROP_RATES.hard.master);
+      expect(POKEBALL_DROP_RATES.hard.master).toBeLessThan(POKEBALL_DROP_RATES.hell.master);
+      expect(POKEBALL_DROP_RATES.easy.legend).toBeLessThan(POKEBALL_DROP_RATES.hard.legend);
+      expect(POKEBALL_DROP_RATES.hard.legend).toBeLessThan(POKEBALL_DROP_RATES.hell.legend);
+      expect(POKEBALL_DROP_RATES.easy.transcend).toBeLessThan(POKEBALL_DROP_RATES.hard.transcend);
+      expect(POKEBALL_DROP_RATES.hard.transcend).toBeLessThan(POKEBALL_DROP_RATES.hell.transcend);
+    });
+
+    it('按难度边界能抽到对应的最高稀有球', () => {
+      const easy = generatePokeballDrops('easy', (() => {
+        const values = [0, 0.999];
+        return () => values.shift() ?? 0;
+      })());
+      const hard = generatePokeballDrops('hard', (() => {
+        const values = [0, 0.999];
+        return () => values.shift() ?? 0;
+      })());
+      const hell = generatePokeballDrops('hell', (() => {
+        const values = [0, 0.999];
+        return () => values.shift() ?? 0;
+      })());
+
+      expect(easy).toEqual([{ type: 'master', count: 1 }]);
+      expect(hard).toEqual([{ type: 'transcend', count: 1 }]);
+      expect(hell).toEqual([{ type: 'transcend', count: 1 }]);
+    });
+
+    it('地狱难度同一次奖励可以合并重复类型数量', () => {
+      const values = [0.99, 0.995, 0.995, 0.995];
+      const drops = generatePokeballDrops('hell', () => values.shift() ?? 0);
+      expect(drops).toEqual([{ type: 'transcend', count: 3 }]);
     });
   });
 

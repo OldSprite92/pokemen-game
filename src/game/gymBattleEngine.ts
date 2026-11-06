@@ -18,7 +18,19 @@ export interface GymBattleState {
   enemyField: GymBattleUnit[];
   enemyBench: GymBattleUnit[];
   log: string[];
+  /** Visual feedback emitted by the most recently resolved round. */
+  lastRoundEffects: GymBattleEffect[];
   winner: 'player' | 'enemy' | null;
+}
+
+export interface GymBattleEffect {
+  attacker: 'player' | 'enemy';
+  actorId: string;
+  targetId: string;
+  skill: Skill;
+  didHit: boolean;
+  isCritical: boolean;
+  damage: number;
 }
 
 export type GymTurnAction =
@@ -65,6 +77,7 @@ export function createGymBattleState(
     enemyField: enemyUnits.slice(0, format),
     enemyBench: enemyUnits.slice(format),
     log: [`${format} 对 ${format} 道馆战开始！双方伙伴同时上场。`],
+    lastRoundEffects: [],
     winner: null,
   };
 }
@@ -78,6 +91,7 @@ function cloneState(state: GymBattleState): GymBattleState {
     enemyField: state.enemyField.map(cloneUnit),
     enemyBench: state.enemyBench.map(cloneUnit),
     log: [...state.log],
+    lastRoundEffects: [],
   };
 }
 
@@ -194,6 +208,7 @@ export function resolveGymRound(state: GymBattleState, playerActions: GymTurnAct
       return;
     }
     const side = getSide(next, actor.unitId);
+    if (!side) return;
     const targetField = side === 'player' ? next.enemyField : next.playerField;
     const requestedTarget = targetField.find((unit) => unit.unitId === action.targetId && unit.currentHp > 0);
     const target = requestedTarget ?? lowestHpTarget(targetField);
@@ -205,6 +220,15 @@ export function resolveGymRound(state: GymBattleState, playerActions: GymTurnAct
       target.guardHits -= 1;
     }
     target.currentHp = Math.max(0, target.currentHp - result.damage);
+    next.lastRoundEffects.push({
+      attacker: side,
+      actorId: actor.unitId,
+      targetId: target.unitId,
+      skill,
+      didHit: !result.isMiss && result.effectiveness > 0 && result.damage > 0,
+      isCritical: result.isCritical,
+      damage: result.damage,
+    });
     next.log.push(result.logMessage);
     if (!result.isMiss && result.damage > 0 && result.effectiveness > 0) {
       const status = rollSkillStatus(skill);

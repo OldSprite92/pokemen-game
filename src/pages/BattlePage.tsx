@@ -324,9 +324,9 @@ export default function BattlePage() {
       updateEncounterStatus(enemyMonster.name, false, true);
 
       // 生成奖励
-      const reward = generateBattleReward(enemyMonster);
       const adventure = useGameStore.getState().currentAdventure;
       const difficultyConfig = getMapDifficultyConfig(adventure?.difficulty);
+      const reward = generateBattleReward(enemyMonster, difficultyConfig.id);
       reward.exp = Math.floor(reward.exp * difficultyConfig.expMultiplier);
       const texts = generateRewardText(reward);
       addTrainerDiamonds(reward.diamonds, currentTrainer?.id);

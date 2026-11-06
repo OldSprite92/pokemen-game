@@ -216,9 +216,11 @@ export interface Badge {
   earnedAt: Date;
   /** 道馆徽章的来源属性与分配状态；旧 Boss 徽章不填写。 */
   element?: ElementType;
-  kind?: 'boss' | 'gym';
+  kind?: 'boss' | 'gym' | 'super';
   assignedMonsterId?: number;
   statBoost?: 'hp' | 'attack' | 'defense' | 'speed';
+  /** 超级勋章被使用的时间；已使用的勋章不可再次强化。 */
+  usedAt?: Date;
 }
 
 /** 贴纸 */
