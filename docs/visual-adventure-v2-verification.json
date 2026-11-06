@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "date": "2026-11-07",
+  "scope": "Tablet-first, offline, visual Pokemon adventure for early-primary-school players",
+  "entry": "src/main.tsx -> src/App.tsx -> src/adventure/GameApp.tsx",
+  "legacy": "Old source remains unreferenced; complete pre-rebuild source snapshot is b5d36b5 on codex/backup-before-visual-rebuild-20261107, pushed to GitHub and Gitee.",
+  "features": ["Three visual starter choices", "Camp and three explorable regions", "Click-to-move trainer and follower", "Visible wild Pokemon encounters", "Turn-based combat with front/back sprites and elemental feedback", "Catch animations and full-team handling", "Three-member parties, camp storage and healing", "Permanent collection history and manual evolution", "Three guardian badges", "Post-badge guardian species become catchable wild encounters", "Versioned local saves and corrupt-save recovery", "System and in-game reduced motion", "Android hardware back handling"],
+  "verification": {
+    "unit_and_ui_tests": {"passed":44,"failed":0,"command":"npm test"},
+    "typescript_and_production_build":"npm run build passed",
+    "dependencies":"npm audit reports 0 known vulnerabilities",
+    "browser_sizes":[[320,740],[390,844],[844,390],[1024,768],[1280,720]],
+    "browser_flows":["Starter -> encounter -> move -> capture -> new partner -> follow", "Unlocked lake travel via map", "Battle state restored after reload", "Native modal and Escape with focus return", "Reduced-motion preference restored after reload", "Guardian challenge -> four attacks -> badge and level-up"],
+    "screenshots":["docs/screenshots/exploration-v2.jpg","docs/screenshots/battle-v2.jpg"],
+    "ui_review":"Complete active UI reviewed against freshly fetched web-interface-guidelines and project child-friendly requirements; legacy pages/components are not routed or bundled.",
+    "android":"Gradle build, v2 APK signature, manifest identity/permissions, all 60 packaged web files versus dist SHA256, and desktop-copy hash verified.",
+    "limitation":"No connected Android device or installed emulator image; actual Android device execution was not verified."
+  },
+  "artifacts": {
+    "previous":{"file":"C:/Users/oldsprite/Desktop/宝可梦大冒险-旧版备份-v1.1.4-20261107.apk","applicationId":"com.pokemon.adventure","bytes":4916923,"sha256":"3B1642DD5D940B195F162683F06313F53EC881E1B2464123B269B22D964C8631"},
+    "new":{"file":"C:/Users/oldsprite/Desktop/宝可梦-一起冒险-v2.0.0-20261107.apk","applicationId":"com.pokemon.adventure.journey","bytes":12685505,"sha256":"EB0CA0D01E1B6B05162006BCDAD0667064B20C14B19F69E297675E90F9267AA0","buildType":"debug","versionCode":7}
+  }
+}

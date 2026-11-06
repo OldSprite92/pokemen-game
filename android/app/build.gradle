@@ -13,7 +13,7 @@ android {
     namespace = "com.pokemon.adventure"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.pokemon.adventure"
+        applicationId "com.pokemon.adventure.journey"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersionCode
