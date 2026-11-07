@@ -1,0 +1,13 @@
+{
+  "tool": "image_gen.imagegen",
+  "outputs": [
+    {
+      "file": "public/game/urban-v3.png",
+      "prompt": "Production environment-only background for a polished 16-bit pixel art monster catching adventure, wide landscape 3:2. Overhead slightly angled handheld RPG camera, no text, no UI, no characters, no creatures. A colorful inviting garden city square in warm daylight: broad walkable pale stone avenue in center and foreground, small elegant cafes and warm red tiled rooftops along upper and side edges, circular flower gardens and fountains, street lamps, a distant slim lattice tower near upper center, leafy trees. Keep the middle 65 percent spacious for game trainer and creature sprites composited later. Discrete crisp square pixel clusters, carefully crafted green, warm ivory, blue and coral palette. Authentic detailed pixel art consistent with high quality retro adventure games. No blur, no photograph, no painted gradients, no interface or lettering."
+    },
+    {
+      "file": "public/game/coast-v3.png",
+      "prompt": "Production environment-only background for a polished 16-bit pixel art monster catching adventure, wide landscape 3:2. Overhead slightly angled handheld RPG camera. Tropical island port town in bright sunshine, palm trees and colorful seaside houses framing upper and left edges, warm sandy walkable path and broad central grass clearing across middle and lower foreground, sparkling turquoise ocean and gentle waves at right edge, small wooden pier and flower planters. Friendly lush detailed environment with clear spacious areas in central 65 percent for trainer and creature sprites added later. No characters, no creatures, no text, no UI, no lettering, no logos. Discrete crisp square pixel clusters, restrained bright palette, beautiful carefully crafted handheld-era game background. No blur, no photorealism, no vector art."
+    }
+  ]
+}

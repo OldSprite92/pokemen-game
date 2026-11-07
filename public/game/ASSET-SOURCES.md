@@ -70,3 +70,6 @@ PokéAPI does not list a trainer-sprite collection. The trainer below comes from
 ## Rendering
 
 Keep the original transparency and proportions. For pixel-art display, use nearest-neighbor scaling (CSS image-rendering: pixelated). The default Pokémon files are 96×96, and item files are 30×30. Map/following scenes can reuse these local front sprites; dedicated directional overworld animations are not claimed by this asset set.
+
+## Journey v3 additions
+Species IDs 403,404,405,522,523,587,650,651,656,657,661,662,722,723,725,726,728,729,744,745 use local front/back PNGs from the same PokeAPI/sprites repository. Raw species base stats, capture rates, types, and Simplified Chinese names were fetched from PokeAPI pokemon and pokemon-species endpoints by scripts/fetch-journey-assets.mjs. Generated city/coast environments: public/game/urban-v3.png and public/game/coast-v3.png; full prompts recorded in docs/journey-v3-image-prompts.json.

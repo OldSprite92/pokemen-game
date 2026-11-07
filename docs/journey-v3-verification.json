@@ -1,0 +1,123 @@
+{
+  "version": "3.0.0",
+  "date": "2026-11-08",
+  "branch": "codex/trainer-journey-v3",
+  "artifact": {
+    "desktop": "C:/Users/oldsprite/Desktop/宝可梦-训练家旅程-v3.0.0-20261108.apk",
+    "applicationId": "com.pokemon.adventure.journey",
+    "versionCode": 8,
+    "buildType": "debug",
+    "bytes": 18881686,
+    "sha256": "07AA1E3D5245E9082CD5379956215652CA38AD38FBF5A4C843C07B2DC12646F1",
+    "signature": "APK v2 verified",
+    "webFilesMatchedToDist": 102,
+    "pngs": 95
+  },
+  "content": {
+    "mainCities": [
+      "常磐市（关都）",
+      "华蓝市（关都）",
+      "黑金市（神奥）",
+      "雷文市（合众）",
+      "密阿雷市（卡洛斯）",
+      "好奥乐市（阿罗拉）"
+    ],
+    "hidden": "流星瀑布（丰缘）",
+    "roadsPerCity": 2,
+    "trainersPerExplorableArea": 3,
+    "totalTrainers": 21,
+    "species": 42,
+    "partyLimit": 6,
+    "movesPerPokemon": "Up to four; natural moves filtered by species learnset; reusable purchased discs have explicit species and level restrictions."
+  },
+  "requirements": {
+    "progression": "Two road clues, local collection research, and field outcomes prepare each city guardian. Guardian victory opens the next main city; defeated guardian species enters the wild pool.",
+    "encounters": "NPC dialogue with accept/decline, teams of 2-3, one-time first-win coins and specific trainer key fragments, lower repeat-win coins.",
+    "hiddenMap": "Three distinct trainer fragments plus the rock badge open the optional hidden map. The hidden guardian's Master Ball reward is issued only once.",
+    "economy": "Coins from battles and clues; supply shop, food that heals HP and cures status, reusable move discs, and flight tickets. Walking is between adjacent opened cities; flights can reach distant opened cities.",
+    "capture": "Nine named balls; eight purchased types and the limited Master Ball. Ball conditions include opening turn, cave, water/bug target, elapsed turns and level comparison. Capture also depends on species catch rate, HP and persistent status; no repeated-attempt guarantee after the tutorial.",
+    "battle": "Shared player/enemy damage model with physical/special stats, speed/priority order, dual-type matchups across 18 types, accuracy, multi-hit moves, and paralysis/burn/poison/confusion. Enemy move choices consider type and existing status.",
+    "feedback": "Attack projectiles and hit rings, enemy move callouts above the sprite, ongoing ailment indicators, HP and damage feedback, keyboard/touch actions immediate, system and in-game reduced motion.",
+    "saves": "Same application ID and v2 storage key to upgrade existing visual-game saves. Validation preserves new progress and battle queues; old lake access is grandfathered through the new badge gate."
+  },
+  "verification": {
+    "tests": {
+      "command": "npm test -- --reporter=dot",
+      "passed": 43,
+      "failed": 0,
+      "files": 6
+    },
+    "typecheck": "npx tsc --noEmit passed",
+    "productionBuild": "npm run build passed",
+    "androidBuild": "Gradle assembleDebug passed; manifest v3.0.0/code 8/minSdk24/targetSdk34; signed and verified.",
+    "persistence": "2000 action snapshots serialized and validated for reloadability.",
+    "balance": "Each of seven guardian areas tested with 20 seeded runs using appropriate varied parties at recommended levels, with at least 14 wins per area. Lone Pikachu repeating electric attacks fails the rock city.",
+    "browser": "Actual controls: starter -> state move -> capture -> road clues -> wild win -> camp -> multi-Pokemon guardian -> food and poison ticks -> badge/180 coins -> next city unlock; NPC dialogue; shop purchase; move eligibility; reduced motion.",
+    "viewports": [
+      [
+        320,
+        740
+      ],
+      [
+        390,
+        844
+      ],
+      [
+        844,
+        390
+      ],
+      [
+        1024,
+        768
+      ],
+      [
+        1280,
+        720
+      ]
+    ],
+    "finalBrowser": "No new production console errors, no broken loaded images, native modal true, no horizontal page overflow in checked layouts.",
+    "uiReview": {
+      "guidelines": "https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md",
+      "scope": [
+        "src/main.tsx",
+        "src/App.tsx",
+        "src/index.css",
+        "all active TSX and shared styles under src/adventure/"
+      ],
+      "legacy": "src/pages and src/components remain preserved legacy source, with no imports from the active application entry.",
+      "fixed": [
+        "Landscape NPC/creature overlap",
+        "Narrow-screen badge access",
+        "False zero status indicators",
+        "Correct dual-type effectiveness labels",
+        "Main completion checks exclude the optional badge from the six-city condition",
+        "Visible focus, labels, skip link, 48px new interaction targets, reduced motion"
+      ]
+    },
+    "productionDependencyAudit": "npm audit --omit=dev: 0 vulnerabilities"
+  },
+  "art": {
+    "tool": "Built-in image_gen.imagegen",
+    "files": [
+      "public/game/urban-v3.png",
+      "public/game/coast-v3.png"
+    ],
+    "prompts": "docs/journey-v3-image-prompts.json",
+    "pokemonSources": "public/game/ASSET-SOURCES.md",
+    "dataSources": [
+      "https://pokeapi.co/api/v2/pokemon/",
+      "https://pokeapi.co/api/v2/pokemon-species/",
+      "https://pokeapi.co/api/v2/move/"
+    ],
+    "adaptation": "Species base stats, types, capture rates and move base rules use the local PokeAPI snapshots. HP growth, damage pacing, economy, natural-move availability and adventure progression are this game's tuned rules, not a full reproduction of Scarlet/Violet."
+  },
+  "screenshots": [
+    "docs/screenshots/journey-v3-world.jpg",
+    "docs/screenshots/journey-v3-trainer.jpg",
+    "docs/screenshots/journey-v3-shop.jpg"
+  ],
+  "limitations": [
+    "No Android device or emulator was connected, so actual device execution is unverified.",
+    "Three-to-five-hour playtime is a design target, not a measured full-length human playtest result."
+  ]
+}

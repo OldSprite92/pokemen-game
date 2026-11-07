@@ -1,0 +1,681 @@
+.shop-trigger {
+  min-height: 48px;
+  padding: 8px 16px;
+  border: 1px solid #b6bd9b;
+  border-radius: 10px;
+  background: #f5e5b4;
+  color: var(--ink);
+  font-weight: 800;
+}
+.area-unova .world-backdrop,
+.area-kalos .world-backdrop {
+  background-image: url("/game/urban-v3.png");
+  background-size: cover;
+  background-position: center;
+}
+.area-alola .world-backdrop {
+  background-image: url("/game/coast-v3.png");
+  background-size: cover;
+  background-position: center;
+}
+.food-panel {
+  margin-top: 20px;
+  border-top: 1px solid #c6cbaa;
+  padding-top: 15px;
+}
+.food-panel > .action-button {
+  margin: 4px;
+}
+.journey-map-grid,
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.journey-map-grid > button,
+.shop-grid > article {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 18px;
+  background: #fffbed;
+  border: 2px solid #c6cbaa;
+  border-radius: 14px;
+  color: var(--ink);
+  text-align: left;
+}
+.journey-map-grid > button {
+  min-height: 130px;
+}
+.journey-map-grid > button.current-city {
+  border-color: #61834b;
+  background: #edf2d6;
+}
+.journey-map-grid small {
+  color: #52634d;
+}
+.journey-map-grid span {
+  font-size: 13px;
+}
+.shop-wallet {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  background: #f1e3b4;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+.shop-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.shop-tabs button {
+  flex: 1;
+  min-height: 48px;
+  padding: 8px;
+  border: 1px solid #b5bea0;
+  border-radius: 9px;
+  background: #fffbed;
+  color: var(--ink);
+}
+.shop-tabs button[aria-pressed="true"] {
+  background: #d7e4c0;
+  border-color: #61834b;
+}
+.shop-grid h3,
+.shop-grid p {
+  margin: 0;
+}
+.shop-grid p {
+  font-size: 14px;
+  line-height: 1.6;
+  flex: 1;
+}
+.shop-grid .action-button {
+  width: 100%;
+  font-size: 14px;
+  min-height: 48px;
+}
+.shop-grid small {
+  color: #52634d;
+}
+.journey-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 14px 0;
+  font-weight: 700;
+}
+.journey-field select {
+  min-height: 48px;
+  max-width: 100%;
+  padding: 10px;
+  border: 1px solid #a8b38d;
+  border-radius: 8px;
+  background: #fffbed;
+  color: var(--ink);
+  font: inherit;
+}
+.trainer-dialog {
+  text-align: center;
+}
+.trainer-dialog > img {
+  image-rendering: pixelated;
+  width: 100px;
+  height: 100px;
+}
+.trainer-team {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+.trainer-team > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.trainer-team .pokemon-sprite {
+  width: 100px;
+  height: 100px;
+}
+.trainer-dialog > .action-button {
+  margin: 8px;
+}
+.ball-token {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 3px solid #304334;
+  border-radius: 50%;
+  background: linear-gradient(#d54c3c 0 44%, #304334 44% 56%, #fffbed 56%);
+  box-shadow: inset 0 0 0 2px #ffffff50;
+}
+.ball-great {
+  background: linear-gradient(#3578b7 0 44%, #304334 44% 56%, #fffbed 56%);
+}
+.ball-ultra,
+.ball-level {
+  background: linear-gradient(#cda530 0 44%, #304334 44% 56%, #fffbed 56%);
+}
+.ball-dusk,
+.ball-net {
+  background: linear-gradient(#72a47b 0 44%, #304334 44% 56%, #fffbed 56%);
+}
+.ball-master {
+  background: linear-gradient(#a06fae 0 44%, #304334 44% 56%, #fffbed 56%);
+}
+.ball-timer,
+.ball-quick {
+  background: linear-gradient(#7dbac6 0 44%, #304334 44% 56%, #fffbed 56%);
+}
+.route-controls {
+  position: absolute;
+  top: 66px;
+  left: 20px;
+  right: 20px;
+  z-index: 4;
+  pointer-events: none;
+}
+.route-tabs,
+.scene-trainers {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.route-controls button {
+  pointer-events: auto;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid #9cad80;
+  background: #fffbeded;
+  border-radius: 9px;
+  color: #2c4534;
+  font-weight: 700;
+}
+.route-tabs button[aria-pressed="true"] {
+  background: #dcebbf;
+  border-color: #57794a;
+}
+.route-controls > p {
+  display: inline-block;
+  background: #fffbeded;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #2c4534;
+  font-size: 12px;
+  margin: 8px 0;
+}
+.scene-trainers {
+  justify-content: flex-end;
+}
+.scene-trainers button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.scene-trainers img {
+  image-rendering: pixelated;
+}
+.area-unova .world-backdrop {
+  background-position: 70% 40%;
+  background-size: 150%;
+}
+.area-kalos .world-backdrop {
+  background-position: 30% 20%;
+  background-size: 150%;
+}
+.area-alola .world-backdrop {
+  background-image: url("/game/arena.png");
+  background-position: 90% 40%;
+}
+.area-secret .world-backdrop {
+  background-image: url("/game/cave.png");
+}
+.move-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.move-options > .back-action {
+  grid-column: 1/-1;
+}
+.ball-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.ball-options > button {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 64px;
+  padding: 10px;
+  border: 1px solid #b5bea0;
+  border-radius: 9px;
+  background: #fffbed;
+  color: #2c4534;
+  text-align: left;
+}
+.ball-options small {
+  flex-basis: 100%;
+  font-size: 11px;
+}
+.ball-options > .back-action {
+  grid-column: 1/-1;
+}
+.status-chip {
+  display: inline-block;
+  background: #6d5483;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+.enemy-move-callout {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  z-index: 8;
+  background: #fffbed;
+  color: #2c4534;
+  border: 2px solid #6a8060;
+  border-radius: 8px;
+  padding: 8px 12px;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 800;
+  animation: enemy-call 1.5s ease-out both;
+  pointer-events: none;
+}
+.enemy-move-effect {
+  animation-delay: 0.45s;
+}
+.condition-aura {
+  position: absolute;
+  inset: 10%;
+  pointer-events: none;
+  z-index: 4;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+.condition-aura i {
+  width: 10px;
+  height: 15px;
+  border-radius: 50%;
+  background: #b282c9;
+  animation: condition-pulse 1.6s ease-in-out infinite;
+}
+.condition-aura i:nth-child(2) {
+  animation-delay: 0.4s;
+}
+.condition-aura i:nth-child(3) {
+  animation-delay: 0.8s;
+}
+.condition-burn i {
+  background: #ec9143;
+}
+.condition-paralysis i {
+  background: #ffe278;
+  clip-path: polygon(50% 0, 100% 45%, 55% 40%, 50% 100%, 0 55%, 45% 60%);
+}
+.condition-confusion i {
+  background: #f0c55a;
+}
+.battle-reward {
+  font-weight: 800;
+  color: #4f7040;
+}
+@keyframes condition-pulse {
+  0%,
+  100% {
+    transform: translateY(8px) scale(0.8);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-12px) scale(1.2);
+    opacity: 0.9;
+  }
+}
+@keyframes enemy-call {
+  0% {
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (max-width: 600px) {
+  .journey-map-grid,
+  .shop-grid {
+    grid-template-columns: 1fr;
+  }
+  .shop-trigger {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .badge-strip {
+    display: none;
+  }
+  .route-controls {
+    top: 56px;
+    left: 10px;
+    right: 10px;
+  }
+  .route-controls button {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+  .route-controls > p {
+    font-size: 10px;
+  }
+  .scene-trainers button {
+    min-height: 48px;
+  }
+  .scene-trainers img {
+    width: 26px;
+    height: 26px;
+  }
+  .scene-trainers {
+    justify-content: flex-start;
+  }
+  .ball-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 210px;
+  }
+  .enemy-move-callout {
+    font-size: 11px;
+    padding: 5px 8px;
+  }
+  .shop-wallet {
+    flex-wrap: wrap;
+  }
+  .world-screen {
+    min-height: 470px;
+  }
+}
+@media (max-height: 500px) and (min-width: 601px) {
+  .route-controls {
+    top: 8px;
+    left: auto;
+    right: 12px;
+    max-width: 380px;
+  }
+  .scene-trainers {
+    gap: 4px;
+  }
+  .route-controls button {
+    font-size: 10px;
+    min-height: 40px;
+  }
+  .route-controls > p {
+    margin: 4px 0;
+    font-size: 10px;
+  }
+  .route-tabs {
+    gap: 4px;
+  }
+  .scene-guide {
+    display: none;
+  }
+  .ball-options {
+    max-height: 130px;
+  }
+  .move-options .move-button {
+    min-height: 48px;
+  }
+  .battle-screen:has(.move-options) .battle-stage {
+    min-height: 150px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .condition-aura i,
+  .enemy-move-callout {
+    animation: none;
+  }
+  .enemy-move-callout {
+    opacity: 1;
+  }
+}
+[data-reduced-motion="true"] .condition-aura i,
+[data-reduced-motion="true"] .enemy-move-callout {
+  animation: none;
+  opacity: 1;
+}
+.area-alola .world-backdrop {
+  background-image: url("/game/coast-v3.png");
+}
+.area-unova .world-backdrop,
+.area-kalos .world-backdrop {
+  background-image: url("/game/urban-v3.png");
+}
+.move-burst {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+  pointer-events: none;
+  color: #f1c74d;
+  overflow: visible;
+}
+.move-burst[data-element="water"],
+.move-burst[data-element="ice"] {
+  color: #5dc5eb;
+}
+.move-burst[data-element="fire"] {
+  color: #f18a43;
+}
+.move-burst[data-element="grass"],
+.move-burst[data-element="bug"] {
+  color: #8bc75c;
+}
+.move-burst[data-element="poison"] {
+  color: #bd85d0;
+}
+.move-burst[data-element="rock"],
+.move-burst[data-element="ground"] {
+  color: #bb9d73;
+}
+.burst-projectile {
+  fill: currentColor;
+  stroke: #fff9dc;
+  stroke-width: 3;
+  transform-origin: 60px 60px;
+  animation: burst-arrive 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.from-enemy .burst-projectile {
+  animation-name: counter-burst;
+  animation-delay: 400ms;
+}
+.burst-highlight {
+  fill: none;
+  stroke: white;
+  stroke-width: 5;
+}
+.burst-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 5;
+  transform-origin: 60px 60px;
+  animation: burst-ring 650ms ease-out both;
+}
+.from-enemy .burst-ring {
+  animation-delay: 400ms;
+}
+@keyframes burst-arrive {
+  0% {
+    transform: translate(-180px, 70px) scale(0.15);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  65% {
+    transform: translate(0, 0) scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+@keyframes counter-burst {
+  0% {
+    transform: translate(180px, -70px) scale(0.15);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  65% {
+    transform: translate(0, 0) scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+@keyframes burst-ring {
+  0%,
+  40% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  60% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .move-burst {
+    display: none;
+  }
+}
+[data-reduced-motion="true"] .move-burst {
+  display: none;
+}
+.combat-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #eaf0d7;
+}
+.combat-stats > div {
+  text-align: center;
+}
+.combat-stats dt {
+  font-size: 12px;
+  color: #506548;
+}
+.combat-stats dd {
+  margin: 6px 0 0;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.battle-status > .type-tag {
+  margin-right: 4px;
+}
+.journey-map-grid button:hover:not(:disabled),
+.shop-tabs button:hover,
+.route-controls button:hover,
+.shop-trigger:hover:not(:disabled) {
+  border-color: #557446;
+  background-color: #e8efd6;
+}
+select:focus-visible,
+a:focus-visible {
+  outline: 3px solid #477649;
+  outline-offset: 3px;
+}
+.roster-choice {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 150px;
+}
+.skip-to-game {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 200;
+  padding: 12px;
+  background: #fffbed;
+  color: #2c4534;
+  transform: translateY(-200%);
+}
+.skip-to-game:focus {
+  transform: none;
+}
+.world-screen.route-1 .world-backdrop {
+  background-position: 25% 65%;
+  background-size: 145%;
+}
+.route-controls button {
+  min-height: 48px;
+}
+.burst-projectile,
+.burst-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@media (max-width: 600px) {
+  .wild-pokemon[data-slot="0"] {
+    left: 25% !important;
+    top: 52% !important;
+  }
+  .wild-pokemon[data-slot="1"] {
+    left: 75% !important;
+    top: 72% !important;
+  }
+  .wild-pokemon[data-slot="2"] {
+    left: 75% !important;
+    top: 52% !important;
+  }
+}
+@media (max-height: 500px) and (min-width: 601px) {
+  .wild-pokemon[data-slot="1"] {
+    top: 78% !important;
+  }
+}
+.world-screen:not(.area-camp) .scene-guide {
+  display: none;
+}
+@media (max-width: 600px) {
+  .game-header > .brand-mark {
+    display: none;
+  }
+  .badge-strip {
+    display: flex !important;
+    min-width: 44px;
+    min-height: 48px;
+    padding: 4px;
+    margin-left: auto;
+    gap: 0;
+  }
+  .badge-strip > .mini-badge {
+    display: none;
+  }
+  .badge-strip::after {
+    content: "徽章";
+    font-size: 12px;
+    color: var(--ink);
+  }
+}

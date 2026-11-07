@@ -1,283 +1,182 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import GameApp from './GameApp'
-import { createGame, reduceGame, type GameState } from './engine'
-import { BACKUP_KEY, loadGame, SAVE_KEY, saveGame } from './save'
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import "@testing-library/jest-dom/vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
+import GameApp from "./GameApp";
+import { createGame, reduceGame, type GameState } from "./engine";
+import { BACKUP_KEY, loadGame, SAVE_KEY, saveGame } from "./save";
 
-const originalShowModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal')
-const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
-const originalMatchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia')
+const originalShowModal = Object.getOwnPropertyDescriptor(
+  HTMLDialogElement.prototype,
+  "showModal",
+);
+const originalClose = Object.getOwnPropertyDescriptor(
+  HTMLDialogElement.prototype,
+  "close",
+);
+const originalMatchMedia = Object.getOwnPropertyDescriptor(
+  window,
+  "matchMedia",
+);
 
 beforeAll(() => {
   // jsdom has dialog elements but no native top-layer behavior. Only implement
   // opening/closing here; focus trapping and inertness require browser testing.
-  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value(this: HTMLDialogElement) { this.setAttribute('open', '') } })
-  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value(this: HTMLDialogElement) { this.removeAttribute('open'); this.dispatchEvent(new Event('close')) } })
-  Object.defineProperty(window, 'matchMedia', { configurable: true, value: vi.fn(() => ({ matches: false, media: '(prefers-reduced-motion: reduce)', addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn() })) })
-})
-beforeEach(() => { window.localStorage.clear(); vi.spyOn(Math, 'random').mockReturnValue(0) })
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+  Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    },
+  });
+  Object.defineProperty(HTMLDialogElement.prototype, "close", {
+    configurable: true,
+    value(this: HTMLDialogElement) {
+      this.removeAttribute("open");
+      this.dispatchEvent(new Event("close"));
+    },
+  });
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn(() => ({
+      matches: false,
+      media: "(prefers-reduced-motion: reduce)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+});
+beforeEach(() => {
+  window.localStorage.clear();
+  vi.spyOn(Math, "random").mockReturnValue(0);
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 afterAll(() => {
-  if (originalShowModal) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', originalShowModal)
-  else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal
-  if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, 'close', originalClose)
-  else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).close
-  if (originalMatchMedia) Object.defineProperty(window, 'matchMedia', originalMatchMedia)
-  else delete (window as Partial<Window>).matchMedia
-})
+  if (originalShowModal)
+    Object.defineProperty(
+      HTMLDialogElement.prototype,
+      "showModal",
+      originalShowModal,
+    );
+  else
+    delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>)
+      .showModal;
+  if (originalClose)
+    Object.defineProperty(HTMLDialogElement.prototype, "close", originalClose);
+  else delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).close;
+  if (originalMatchMedia)
+    Object.defineProperty(window, "matchMedia", originalMatchMedia);
+  else delete (window as Partial<Window>).matchMedia;
+});
 
-function click(name: string | RegExp, scope: HTMLElement = document.body): void { fireEvent.click(within(scope).getByRole('button', { name })) }
-function stored(): GameState { const result = loadGame(); expect(result.status).toBe('loaded'); return result.state! }
-function seed(state: GameState): void { expect(saveGame(state).ok).toBe(true) }
+function click(
+  name: string | RegExp,
+  scope: HTMLElement = document.body,
+): void {
+  fireEvent.click(within(scope).getByRole("button", { name }));
+}
+function stored(): GameState {
+  const result = loadGame();
+  expect(result.status).toBe("loaded");
+  return result.state!;
+}
+function seed(state: GameState): void {
+  expect(saveGame(state).ok).toBe(true);
+}
 function addPartner(state: GameState, speciesId: number): GameState {
-  const encounter = reduceGame(state, { type: 'encounter', speciesId }, () => 0)
-  const caught = reduceGame(encounter, { type: 'catch' }, () => 0)
-  return reduceGame(caught, { type: 'finishBattle' })
+  const encounter = reduceGame(
+    state,
+    { type: "encounter", speciesId },
+    () => 0,
+  );
+  const caught = reduceGame(encounter, { type: "catch" }, () => 0);
+  return reduceGame(caught, { type: "finishBattle" });
 }
 
-describe('visual adventure player journeys', () => {
-  it('selects a pictured starter, captures a visible encounter, follows the new friend and travels to the unlocked lake', () => {
-    render(<GameApp />)
-    const starters = screen.getByLabelText('选择初始伙伴')
-    click(/杰尼龟/, starters)
-    expect(within(starters).getByRole('button', { name: /杰尼龟/ })).toHaveAttribute('aria-pressed', 'true')
-    click('和杰尼龟出发')
-    expect(screen.getByRole('main', { name: '风铃草地探索场景' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '遇见绿毛虫' })).toContainElement(screen.getByRole('img', { name: '绿毛虫' }))
-    click('遇见绿毛虫')
-    expect(screen.getByRole('main', { name: '杰尼龟与绿毛虫对战' })).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: '杰尼龟' })).toHaveAttribute('src', '/game/pokemon/7-back.png')
-    expect(screen.getByRole('img', { name: '绿毛虫' })).toHaveAttribute('src', '/game/pokemon/10.png')
-    click('招式')
-    click(/水枪/)
-    expect(screen.getByText('好机会')).toBeInTheDocument()
-    expect(stored().battle?.turn).toBe(1)
-    click('捕捉')
-    expect(screen.getByRole('heading', { name: '遇见新伙伴！' })).toBeInTheDocument()
-    expect(stored().roster).toHaveLength(2)
-    click('看看新伙伴')
-    const team = screen.getByRole('dialog', { name: '我的伙伴' })
-    expect(within(team).getByRole('heading', { name: '绿毛虫' })).toBeInTheDocument()
-    click('一起走', team)
-    expect(stored().roster.find(creature => creature.id === stored().leaderId)?.speciesId).toBe(10)
-    click('关闭窗口', team)
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '查看跟随伙伴绿毛虫' })).toBeInTheDocument()
-    click(/地图/)
-    const map = screen.getByRole('dialog', { name: '下一站，去哪里？' })
-    expect(within(map).getByRole('button', { name: /晴空湖畔/ })).toHaveAttribute('aria-disabled', 'false')
-    click(/晴空湖畔/, map)
-    expect(screen.getByRole('main', { name: '晴空湖畔探索场景' })).toBeInTheDocument()
-    expect(stored().area).toBe('lake')
-    expect(stored().battle).toBeNull()
-  })
-
-  it('resumes the actual saved battle, including HP, then returns to the same exploration area', () => {
-    let state = reduceGame(createGame(25), { type: 'encounter', speciesId: 133 }, () => 0)
-    state = reduceGame(state, { type: 'attack', moveIndex: 0 }, () => 0)
-    seed(state)
-    render(<GameApp />)
-    expect(screen.getByRole('main', { name: '皮卡丘与伊布对战' })).toBeInTheDocument()
-    expect(screen.getByRole('progressbar', { name: '伊布体力' })).toHaveAttribute('aria-valuenow', String(state.battle!.enemy.hp))
-    expect(screen.getByRole('progressbar', { name: '皮卡丘体力' })).toHaveAttribute('aria-valuenow', String(state.roster[0].hp))
-    expect(screen.getByText('第 2 回合')).toBeInTheDocument()
-    click('离开')
-    expect(screen.getByRole('main', { name: '风铃草地探索场景' })).toBeInTheDocument()
-    expect(stored().battle).toBeNull()
-    expect(stored().roster).toHaveLength(1)
-  })
-
-  it('makes the opposing attack and the player hit visible after selecting a move', () => {
-    seed(reduceGame(createGame(25), { type: 'encounter', speciesId: 133 }, () => 0))
-    const { container } = render(<GameApp />)
-    click('招式')
-    click(/电光一闪/)
-    expect(container.querySelector('.enemy-attack')).toBeInTheDocument()
-    expect(container.querySelector('.player-hit')).toBeInTheDocument()
-    expect(stored().battle?.turn).toBe(1)
-  })
-
-  it('keeps a newly caught duplicate at camp when full, then lets the player replace a party member', () => {
-    let state = addPartner(createGame(25), 10)
-    state = addPartner(state, 16)
-    state = reduceGame(state, { type: 'encounter', speciesId: 10 }, () => 0)
-    seed(state)
-    render(<GameApp />)
-    click('捕捉')
-    expect(screen.getByText('正在营地等你，给它一个队伍位置吧。')).toBeInTheDocument()
-    const newlyCaught = stored().battle!.caughtId!
-    expect(stored().teamIds).not.toContain(newlyCaught)
-    click('看看新伙伴')
-    let team = screen.getByRole('dialog', { name: '我的伙伴' })
-    expect(within(team).getByRole('button', { name: '加入队伍' })).toBeDisabled()
-    click(/波波\s*Lv\./, team)
-    click('留在营地', team)
-    expect(stored().teamIds).toHaveLength(2)
-    // Duplicate species remain distinguishable by their visible team/camp status.
-    click(/绿毛虫\s*Lv\. 3 · 在营地/, team)
-    click('加入队伍', team)
-    expect(stored().teamIds).toContain(newlyCaught)
-    expect(stored().teamIds).toHaveLength(3)
-    click('一起走', team)
-    expect(stored().leaderId).toBe(newlyCaught)
-  })
-
-  it('keeps the battle turn unchanged while opening and closing the bag, and consumes one turn for a berry', () => {
-    let state = reduceGame(createGame(25), { type: 'encounter', speciesId: 133 }, () => 0)
-    state = reduceGame(state, { type: 'attack', moveIndex: 0 }, () => 0)
-    seed(state)
-    render(<GameApp />)
-    click('打开背包使用树果')
-    const bag = screen.getByRole('dialog', { name: '冒险背包' })
-    expect(stored().battle?.turn).toBe(1)
-    expect(within(bag).queryByRole('button', { name: '回营地休息' })).not.toBeInTheDocument()
-    click(/皮卡丘.*喂一颗树果/, bag)
-    expect(stored().berries).toBe(2)
-    expect(stored().battle?.turn).toBe(2)
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByText('伊布使出了电光一闪')).toBeInTheDocument()
-    expect(stored().events.filter(event => event.kind === 'damage')).toHaveLength(1)
-    expect(stored().battle?.turn).toBe(2)
-    expect(screen.getByRole('main', { name: '皮卡丘与伊布对战' })).toBeInTheDocument()
-  })
-
-  it('closes a native dialog on its cancel event without changing the saved game', () => {
-    seed(createGame(25))
-    render(<GameApp />)
-    click('设置')
-    const dialog = screen.getByRole('dialog', { name: '冒险设置' })
-    expect(dialog).toHaveAttribute('open')
-    fireEvent(dialog, new Event('cancel', { bubbles: true, cancelable: true }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(stored().revision).toBe(0)
-    expect(screen.getByRole('button', { name: '设置' })).toBeInTheDocument()
-  })
-
-  it('shows a failed save and allows a real retry after storage recovers', () => {
-    render(<GameApp />)
-    const blocked = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError') })
-    click('和皮卡丘出发')
-    expect(screen.getByRole('alert')).toHaveTextContent('进度暂未保存')
-    expect(screen.getByText('保存遇到问题')).toBeInTheDocument()
-    expect(screen.queryByText('已自动保存')).not.toBeInTheDocument()
-    blocked.mockRestore()
-    click('重试保存')
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.getByText('已自动保存')).toBeInTheDocument()
-    expect(stored().roster[0].speciesId).toBe(25)
-  })
-
-  it('tells the player when an existing save is unreadable before starting over', () => {
-    window.localStorage.setItem(SAVE_KEY, '{broken')
-    render(<GameApp />)
-    expect(screen.getByText(/这份冒险记录暂时无法读取/)).toBeVisible()
-    expect(window.localStorage.getItem(SAVE_KEY)).toBe('{broken')
-    expect(screen.getByRole('button', { name: '和皮卡丘出发' })).toBeInTheDocument()
-  })
-  it('shows storage failure while keeping a recovered backup playable', () => {
-    window.localStorage.setItem(SAVE_KEY, '{broken')
-    window.localStorage.setItem(BACKUP_KEY, JSON.stringify(createGame(25)))
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError') })
-    render(<GameApp />)
-    expect(screen.getByRole('alert')).toHaveTextContent('已从上一次安全记录恢复冒险')
-    expect(screen.getByRole('alert')).toHaveTextContent('无法保存新进度')
-    expect(screen.getByText('保存遇到问题')).toBeInTheDocument()
-    expect(screen.queryByText('已自动保存')).not.toBeInTheDocument()
-    click('遇见绿毛虫')
-    expect(screen.getByRole('main', { name: '皮卡丘与绿毛虫对战' })).toBeInTheDocument()
-  })
-
-  it('communicates guardian restrictions before the fight and disables catch and leave during it', () => {
-    seed(createGame(25))
-    render(<GameApp />)
-    click('守护者挑战')
-    const guardian = screen.getByRole('dialog', { name: '花田守护者' })
-    expect(within(guardian).getByText(/挑战中不能捕捉或离开/)).toBeInTheDocument()
-    expect(stored().battle).toBeNull()
-    click('再准备一下', guardian)
-    expect(stored().battle).toBeNull()
-    click('守护者挑战')
-    click('我们准备好了', screen.getByRole('dialog', { name: '花田守护者' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '挑战中' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '离开' })).toBeDisabled()
-    expect(stored().battle?.kind).toBe('boss')
-  })
-
-  it('persists the reduced-motion setting and keeps all actions usable', () => {
-    seed(createGame(25))
-    const { container } = render(<GameApp />)
-    click('设置')
-    fireEvent.click(screen.getByRole('checkbox', { name: /减少动画/ }))
-    expect(stored().settings.reducedMotion).toBe(true)
-    expect(container.querySelector('.journey-shell')).toHaveAttribute('data-reduced-motion', 'true')
-    click('关闭窗口')
-    click('遇见绿毛虫')
-    expect(screen.getByRole('button', { name: '捕捉' })).toBeEnabled()
-    click('捕捉')
-    expect(screen.getByRole('heading', { name: '遇见新伙伴！' })).toBeInTheDocument()
-  })
-
-  it('lets the player trigger evolution and sees the new form in the party and discovery book', () => {
-    const state = addPartner(createGame(25), 10)
-    state.roster[1].level = 4
-    seed(state)
-    render(<GameApp />)
-    click(/^伙伴/)
-    const team = screen.getByRole('dialog', { name: '我的伙伴' })
-    click(/绿毛虫\s*Lv\./, team)
-    click('进化成铁甲蛹', team)
-    expect(within(team).getByRole('heading', { name: '铁甲蛹' })).toBeInTheDocument()
-    expect(within(team).getByRole('img', { name: '铁甲蛹' })).toHaveAttribute('src', '/game/pokemon/11.png')
-    expect(stored().roster[1].id).toBe(state.roster[1].id)
-    expect(stored().roster[1].speciesId).toBe(11)
-    click('关闭窗口', team)
-    click(/^图鉴/)
-    const dex = screen.getByRole('dialog', { name: '我的发现图鉴' })
-    click('查看铁甲蛹', dex)
-    expect(within(dex).getByRole('heading', { name: '铁甲蛹' })).toBeInTheDocument()
-    expect(within(dex).getByText(/已成为伙伴/)).toBeInTheDocument()
-    click('查看绿毛虫', dex)
-    expect(within(dex).getByRole('heading', { name: '绿毛虫' })).toBeInTheDocument()
-    expect(within(dex).getByText(/已成为伙伴/)).toBeInTheDocument()
-    expect(stored().caughtSpeciesIds).toEqual([25, 10, 11])
-  })
-
-  it('shows the third badge and the completed island when the final guardian is defeated', () => {
-    let state = addPartner(createGame(25), 10)
-    state.badges = ['meadow', 'lake']
-    state = reduceGame(state, { type: 'travel', area: 'cave' })
-    state = reduceGame(state, { type: 'encounter', boss: true }, () => 0)
-    state.battle!.enemy.hp = 1
-    seed(state)
-    render(<GameApp />)
-    click('招式')
-    click(/电光一闪/)
-    expect(screen.getByRole('heading', { name: '获得冒险徽章！' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '星岩徽章' })).toBeInTheDocument()
-    expect(screen.getByText(/三枚徽章集齐了/)).toBeInTheDocument()
-    expect(stored().badges).toEqual(['meadow', 'lake', 'cave'])
-    click('冒险徽章，已获得3枚，共3枚')
-    expect(screen.getByRole('dialog', { name: '小岛探险家！' })).toBeInTheDocument()
-    click('关闭窗口')
-    click('继续冒险')
-    expect(screen.getByRole('main', { name: '星光洞窟探索场景' })).toBeInTheDocument()
-    expect(stored().battle).toBeNull()
-  })
-  it('shows ordinary victory for a guardian rematch instead of awarding the same badge again', () => {
-    let state = createGame(25)
-    state.badges = ['meadow']
-    state = reduceGame(state, { type: 'encounter', boss: true }, () => 0)
-    state.battle!.enemy.hp = 1
-    seed(state)
-    render(<GameApp />)
-    click('招式')
-    click(/电光一闪/)
-    expect(screen.getByRole('heading', { name: '太棒了，赢啦！' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: '获得冒险徽章！' })).not.toBeInTheDocument()
-    expect(screen.getByText(/再次赢得了守护者的认可/)).toBeInTheDocument()
-    expect(stored().battle?.newBadge).toBe(false)
-    expect(stored().badges).toEqual(['meadow'])
-  })
-})
+describe("trainer adventure player journeys", () => {
+  it("starts with pictured partners and opens four actual moves", () => {
+    render(<GameApp />);
+    click("和皮卡丘出发");
+    expect(
+      screen.getByRole("main", { name: "常磐市探索场景" }),
+    ).toBeInTheDocument();
+    click("遇见绿毛虫");
+    click("招式");
+    expect(screen.getByRole("button", { name: /电磁波/ })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /命中/ })).toHaveLength(4);
+  });
+  it("lets the player choose a real ball and stores the capture", () => {
+    render(<GameApp />);
+    click("和皮卡丘出发");
+    click("遇见绿毛虫");
+    click("捕捉");
+    click(/精灵球 ×10/);
+    expect(screen.getByText("遇见新伙伴！")).toBeInTheDocument();
+    expect(stored().roster).toHaveLength(2);
+    expect(stored().journey?.balls.poke).toBe(9);
+  });
+  it("shows trainer dialogue and allows declining without starting combat", () => {
+    seed(createGame(25));
+    render(<GameApp />);
+    click("训练家 1");
+    expect(screen.getByText("旅行训练家小岚")).toBeInTheDocument();
+    click("下次再切磋");
+    expect(stored().battle).toBeNull();
+    click("训练家 1");
+    click("接受挑战");
+    expect(stored().battle?.kind).toBe("trainer");
+    expect(screen.getByRole("button", { name: "挑战中" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "离开" })).toBeDisabled();
+  });
+  it("persists a purchase and prevents unaffordable exchanges", () => {
+    seed(createGame(25));
+    render(<GameApp />);
+    click("商城");
+    const article = screen
+      .getByRole("heading", { name: "高级球" })
+      .closest("article")!;
+    click("80 金币兑换", article);
+    expect(stored().journey?.coins).toBe(120);
+    expect(stored().journey?.balls.ultra).toBe(1);
+    click("80 金币兑换", article);
+    expect(within(article).getByRole("button")).toBeDisabled();
+  });
+  it("keeps unopened cities locked and presents the clue objectives", () => {
+    seed(createGame(25));
+    render(<GameApp />);
+    expect(screen.getByText(/调查路标 0\/2/)).toBeInTheDocument();
+    click(/地图.*去新地方/);
+    expect(screen.getByRole("button", { name: /华蓝市/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /流星瀑布/ })).toBeDisabled();
+  });
+  it("persists reduced motion and reports a blocked storage write", () => {
+    seed(createGame(25));
+    render(<GameApp />);
+    click("设置");
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(stored().settings.reducedMotion).toBe(true);
+    expect(document.querySelector(".journey-shell")).toHaveAttribute(
+      "data-reduced-motion",
+      "true",
+    );
+  });
+});
